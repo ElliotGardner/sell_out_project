@@ -35,6 +35,8 @@
 
 ### New Features
 
+* Spotify Artist Popularity Incorporation
+
 * Days Until Sell Out Prediction
 
 * User Event Watchlist
@@ -59,6 +61,7 @@
 * User Interaction - Web App Construction - Interface Building
 * User Interaction - Event Selection - Event Search
 * User Interaction - Event Selection - Event Selection
-* Days Until Sell Out Prediction
-* User Event Watchlist
-* Customized User Event Digest
+* New Features - Spotify Artist Popularity Incorporation
+* New Features - Days Until Sell Out Prediction
+* New Features - User Event Watchlist
+* New Features - Customized User Event Digest
