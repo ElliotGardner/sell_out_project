@@ -8,30 +8,57 @@
   
 # Planning
 
-### Theme 1
+### Event Listings and Prediction
 
-* Epic 1: desc
-  * Story 1: desc
-  * Story 2: desc
-  * Story 3: desc
+* Data Gathering: Building the pipeline for connecting to the data source (API) and ingesting the data
+  * API Integration: I can access event data from the Eventbrite API
+  * Data Capture: I can store data from Eventbrite for easy access later
+  * Data Formatting: I have labeled data that is appropriate for building a classification model
   
- * Epic 2: desc
+* Sell-Out Prediction: Building a model for predicting whether an event will sell-out prior to the start date
+  * Logistic Model: I have a basic logistic model for classifying events as selling out or not
+  * Neural Network: I have a neural network for classifying events
+  * Boosted Tree: I have a boosted tree for classifying events
+  * Random Forest: I have a random forest for classifying events
+  * Model Selection: I have a model which performs best according to ML metrics and for latency considerations
  
- * Epic 3: desc
+### User Interaction
+
+* Web App Construction: Establishing the web app and necessary back-end components
+  * Database Hosting: The web app can access the data necessary for re-training a model and updating predictions
+  * Model Hosting: The web app can access the selected model, re-train as necessary, and retrieve predictions
+  * Interface Building: The web app has a front-end that can be interacted with
+
+* Event Selection: Constructing an interface for users to see and select events of interest
+  * Event Search: The web app can pull a list of events for given criteria from the eventbrite API
+  * Event Selection: A user can select an event from the list and see the details, along with the prediction of selling-out or not
+
+### New Features
+
+* Days Until Sell Out Prediction
+
+* User Event Watchlist
+
+* Customized User Event Digest
  
- * Epic 4: desc
+# Backlog
  
- ### Theme 2
+1. Events Listings and Prediction - Data Gathering - API Integration (1 pt) - PLANNED
+2. Events Listings and Prediction - Data Gathering - Data Gathering (2 pts) - PLANNED
+3. Events Listings and Prediction - Data Gathering - Data Formatting (2 pts) - PLANNED
+4. Events Listings and Prediction - Sell-Out Prediction - Logistic Model (1 pt) - PLANNED
+5. Events Listings and Prediction - Sell-Out Prediction - Boosted Tree (1 pt) - PLANNED
+6. Events Listings and Prediction - Sell-Out Prediction - Random Forest (1 pt) - PLANNED
+7. Events Listings and Prediction - Sell-Out Prediction - Neural Network (1 pt) - PLANNED
+8. Events Listings and Prediction - Sell-Out Prediction - Model Selection (2 pts) - PLANNED
+9. User Interaction - Web App Construction - Database Hosting (4 pts)
+10. User Interaction - Web App Construction - Model Hosting (4 pts)
  
- # Backlog
- 
- 1. Theme 1 - Epic 1 - Story 1 - Planned
- 2. Theme 1 - Epic 1 - Story 2 - Planned
- 3. Theme 1 - Epic 1 - Story 3
- 
- # Icebox
- 
- * Theme 1 - Epic 2
- * Theme 1 - Epic 3
- * Theme 1 - Epic 4
- * Theme 2
+# Icebox
+
+* User Interaction - Web App Construction - Interface Hosting
+* User Interaction - Event Selection - Event Search
+* User Interaction - Event Selection - Event Selection
+* Days Until Sell Out Prediction
+* User Event Watchlist
+* Customized User Event Digest
