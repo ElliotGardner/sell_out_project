@@ -2,31 +2,41 @@ import json, requests  # import necessary libraries for intake of JSON results f
 from getpass import getpass  # import getpass for input of the token without showing it
 from datetime import datetime  # import datetime for formatting of timestamps
 from sqlalchemy import select, insert, Table, create_engine, MetaData, update  # import needed sqlalchemy libraries for db
+import logging.config # import logging config
+
+logging.config.fileConfig("config\\logging\\local.conf")
+logger = logging.getLogger("update_database_log")
+
+logger.debug('Start of update_database Script')
 
 # set the oauth token
 oauth = getpass(prompt='Enter the OAuth Personal Token for queries:')
 headers = {
     'Authorization': ('Bearer ' + oauth),
 }
+logger.debug('OAuth token entered')
 
 # pull new events
 events = []
-print('Retrieving Page 1...')
+logger.debug('Retrieving Page 1...')
 response_all = requests.get('https://www.eventbriteapi.com/v3/events/search/?categories=103&formats=5,6&location.address=chicago&location.within=50mi&sort_by=date&expand=venue,format,bookmark_info,ticket_availability,music_properties,guestlist_metrics,basic_inventory_info', headers = headers)
 results_all = json.loads(response_all.text)
 events = results_all['events']
+logger.debug('has_more_items is %s', results_all['pagination']['has_more_items'])
 page = 1
 while results_all['pagination']['has_more_items']:
     page += 1
-    print('Retrieving Page ' + str(page) + "...")
+    logger.debug('Retrieving Page %s...', page)
     response_all = requests.get('https://www.eventbriteapi.com/v3/events/search/?categories=103&formats=5,6&location.address=chicago&location.within=50mi&sort_by=date&expand=venue,format,bookmark_info,ticket_availability,music_properties,guestlist_metrics,basic_inventory_info&page=' + str(page), headers = headers)
     results_all = json.loads(response_all.text)
     events += results_all['events']
-print(str(page) + " pages received")
-print(str(len(events)) + " events pulled")
+    logger.debug('has_more_items is %s', results_all['pagination']['has_more_items'])
+logger.info("%s pages received", page)
+logger.info("%s events pulled", len(events))
 
 # connect to the database and pull the current events table
-engine = create_engine("sqlite:///C:\\Users\\Elliot\\Documents\\Big Data\\NW\\MSiA\\MSiA-423 Analytics Value Chain\\sell_out_project\\data\\events.db")
+logger.debug('Attempting connection with events.db')
+engine = create_engine("sqlite:///data\\events.db")
 connection = engine.connect()
 metadata = MetaData()
 events_table = Table('events', metadata, autoload=True, autoload_with=engine)
@@ -36,13 +46,13 @@ query = select([events_table.c.id])
 event_ids = [event[0] for event in list(connection.execute(query).fetchall())]
 
 # print how many events are in the db
-print(str(len(event_ids)) + " events currently in the db")
+logger.info("%s events currently in the db", len(event_ids))
 
 # build a list of the events in the pull whose event id is not in the database already
 events_new = [event for event in events if int(event['id']) not in event_ids]
 
 # print how many new events were in the pull
-print(str(len(events_new)) + " new events from the pull")
+logger.info("%s new events from the pull", len(events_new))
 
 # build a list of dictionaries with the necessary values for each new event from the eventbrite pull
 events_list = [{'id':int(event['id']),
@@ -80,17 +90,17 @@ if len(events_new) != 0:
     result_proxy = connection.execute(stmt, events_list)
 
     # print how many events were added to the db
-    print(str(result_proxy.rowcount) + " new events added to the db")
+    logger.info("%s new events added to the db", result_proxy.rowcount)
 
 else:
     # if no insert is performed, the say so
-    print("0 new events added to the db")
+    logger.info("0 new events added to the db")
 
 # build a list of the events in the pull whose event id is already in the database
 events_old = [event for event in events if int(event['id']) in event_ids]
 
 # print how many events from the pull were already in the db
-print(str(len(events_old)) + " old events from the pull")
+logger.info("%s old events from the pull", len(events_old))
 
 # create a list of the ids of events already in the db
 events_old_ids = [int(event['id']) for event in events_old]
@@ -108,26 +118,23 @@ newSellOuts = 0
 for event in events_old:
     if event['ticket_availability']['is_sold_out'] != event_sell_outs[int(event['id'])]['soldOut']:
         # if the event sold out status has changed, update isSoldOut and change the date of sell out to today
-        print("updating " + event['id'])
+        logger.debug("updating %s", event['id'])
         update_query = update(events_table).where(events_table.c.id == int(event['id'])).values(
             isSoldOut=event['ticket_availability']['is_sold_out'], soldOutDate=datetime.now())
         result = connection.execute(update_query)
 
         # print whether the query returned successfully or not
         if result.rowcount == 1:
-            print("updated " + event['id'])
+            logger.info("updated %s", event['id'])
         else:
-            print("problem updating " + event['id'])
+            logger.warning("problem updating %s", event['id'])
 
         # increment the newSellOuts counter
         newSellOuts += 1
 
 # print how many events had a change in sold out status
-print(str(newSellOuts) + " old events newly sold out")
+logger.info("%s old events newly sold out", newSellOuts)
 
 # close the connection to the database
 connection.close()
-
-
-
-
+logger.debug('DB connection closed')
