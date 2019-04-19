@@ -1,4 +1,5 @@
 import json, requests  # import necessary libraries for intake of JSON results from eventbrite
+import sys # import sys for getting arguments from the command line call
 from getpass import getpass  # import getpass for input of the token without showing it
 from datetime import datetime  # import datetime for formatting of timestamps
 from sqlalchemy import select, insert, Table, create_engine, MetaData, update  # import needed sqlalchemy libraries for db
@@ -9,8 +10,13 @@ logger = logging.getLogger("update_database_log")
 
 logger.debug('Start of update_database Script')
 
-# set the oauth token
-oauth = getpass(prompt='Enter the OAuth Personal Token for queries:')
+# check if a token argument was passed
+if len(sys.argv) > 1:
+    oauth = sys.argv[1]
+else: # if no additional arguments were passed, then prompt for a token
+    oauth = getpass(prompt='Enter the OAuth Personal Token for queries:')
+
+# set the token into a requests header
 headers = {
     'Authorization': ('Bearer ' + oauth),
 }
@@ -34,25 +40,37 @@ while results_all['pagination']['has_more_items']:
 logger.info("%s pages received", page)
 logger.info("%s events pulled", len(events))
 
-# connect to the database and pull the current events table
+# connect to the database and pull the current events and venues tables
 logger.debug('Attempting connection with events.db')
 engine = create_engine("sqlite:///data\\events.db")
 connection = engine.connect()
 metadata = MetaData()
 events_table = Table('events', metadata, autoload=True, autoload_with=engine)
+venues_table = Table('venues', metadata, autoload=True, autoload_with=engine)
 
 # query the ids of each event and create it as a list
 query = select([events_table.c.id])
 event_ids = [event[0] for event in list(connection.execute(query).fetchall())]
 
-# print how many events are in the db
+# query the ids of each venue and create it as a list
+query = select([venues_table.c.id])
+venue_ids = [venue[0] for venue in list(connection.execute(query).fetchall())]
+
+# print how many events and venues are in the db
 logger.info("%s events currently in the db", len(event_ids))
+logger.info("%s venues currently in the db", len(venue_ids))
 
 # build a list of the events in the pull whose event id is not in the database already
 events_new = [event for event in events if int(event['id']) not in event_ids]
 
+# build a list of the events in the pull whose venue id is not in the database already
+venues_new = [event for event in events if int(event['venue_id']) not in venue_ids]
+
 # print how many new events were in the pull
 logger.info("%s new events from the pull", len(events_new))
+
+# print how many new events were in the pull
+logger.info("%s new venues from the pull", len(venues_new))
 
 # build a list of dictionaries with the necessary values for each new event from the eventbrite pull
 events_list = [{'id':int(event['id']),
@@ -81,6 +99,15 @@ events_list = [{'id':int(event['id']),
                 'allData':event}
                for event in events_new]
 
+# build a list of dictionaries with the necessary values for each new venue from the eventbrite pull
+venues_list = [{'id':int(venue['venue_id']),
+                'name':venue['venue']['name'],
+                'city':venue['venue']['address']['city'],
+                'capacity': int(venue['venue']['capacity']) if venue['venue']['capacity'] is not None else 10000,
+                'ageRestriction':venue['venue']['age_restriction']
+               }
+               for venue in venues_new]
+
 # if there are new events to add, then do so
 if len(events_new) != 0:
 
@@ -96,6 +123,22 @@ if len(events_new) != 0:
 else:
     # if no insert is performed, the say so
     logger.info("0 new events added to the db")
+
+# if there are new venuess to add, then do so
+if len(venues_new) != 0:
+
+    # insert into the events table
+    stmt = insert(venues_table)
+
+    # execute the insert
+    result_proxy = connection.execute(stmt, venues_list)
+
+    # print how many events were added to the db
+    logger.info("%s new venues added to the db", result_proxy.rowcount)
+
+else:
+    # if no insert is performed, the say so
+    logger.info("0 new venues added to the db")
 
 # build a list of the events in the pull whose event id is already in the database
 events_old = [event for event in events if int(event['id']) in event_ids]
