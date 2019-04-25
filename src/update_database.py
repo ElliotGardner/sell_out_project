@@ -108,6 +108,18 @@ venues_list = [{'id':int(venue['venue_id']),
                }
                for venue in venues_new]
 
+# in case we get multiple new events with the same venue, we must filter our list of new venues to only get the uniques
+venues_unique = []
+venues_unique_id = []
+for venue in venues_list:
+    if venue['id'] not in venues_unique_id:
+        venues_unique.append(venue)
+        venues_unique_id.append(venue['id'])
+    else:
+        logger.debug("%s is not unique", venue['id'])
+
+logger.info("%s unique new venues from the pull", len(venues_unique))
+
 # if there are new events to add, then do so
 if len(events_new) != 0:
 
@@ -125,13 +137,13 @@ else:
     logger.info("0 new events added to the db")
 
 # if there are new venuess to add, then do so
-if len(venues_new) != 0:
+if len(venues_unique) != 0:
 
     # insert into the events table
     stmt = insert(venues_table)
 
     # execute the insert
-    result_proxy = connection.execute(stmt, venues_list)
+    result_proxy = connection.execute(stmt, venues_unique)
 
     # print how many events were added to the db
     logger.info("%s new venues added to the db", result_proxy.rowcount)
