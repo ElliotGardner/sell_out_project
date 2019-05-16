@@ -65,3 +65,11 @@
 * New Features - Days Until Sell Out Prediction
 * New Features - User Event Watchlist
 * New Features - Customized User Event Digest
+
+Instructions:
+
+You need an API key to call the eventbrite API, I will message you one to use so that it isn't posted online.
+
+config/config.yml holds the key configurations for running the ingest_data and create_database scripts.
+
+Only ingest_data and create_database need to be looked at, other scripts weren't used or were for original efforts to get API ingest working.
