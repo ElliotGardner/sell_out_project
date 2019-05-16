@@ -109,8 +109,9 @@ def create_db(database_name, type):
             password = os.environ.get("MYSQL_PASSWORD")
             host = os.environ.get("MYSQL_HOST")
             port = os.environ.get("MYSQL_PORT")
-            engine_string = "{}:///{}:{}@{}:{}/{}".format(conn_type, user, password, host, port, database_name)
+            engine_string = "{}://{}:{}@{}:{}/{}".format(conn_type, user, password, host, port, database_name)
 
+        logger.debug("Engine string is %s", engine_string)
         # create the engine
         engine = create_engine(engine_string)
 

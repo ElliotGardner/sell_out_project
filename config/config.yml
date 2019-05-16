@@ -7,8 +7,8 @@ ingest_data:
 
 create_database:
   rds_database_type: mysql+pymysql
-  rds_database_name: mysql-nw-elliotgardner
+  rds_database_name: msia423
   local_database_folder: data
   local_database_type: sqlite
   local_database_name: events_test.db
-  how: local
+  how: rds
