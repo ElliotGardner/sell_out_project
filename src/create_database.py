@@ -1,252 +1,230 @@
-import json, requests  # import necessary libraries for intake of JSON results from eventbrite
-import sys # import sys for getting arguments from the command line call
-from getpass import getpass  # import getpass for input of the token without showing it
+import os  # import os for getting environment variables
+import sys  # import sys for getting arguments from the command line call
+import argparse  # import for parsing arguments from the command line
+import yaml  # import yaml for loading the config file
 from datetime import datetime  # import datetime for formatting of timestamps
-from sqlalchemy import insert, Table, create_engine, MetaData, Column, String, Integer, Boolean, DATETIME, DECIMAL, JSON  # import needed sqlalchemy libraries for db
-import logging.config # import logging config
+from sqlalchemy import create_engine, Column, String, Integer, Boolean, DATETIME, DECIMAL, JSON  # import needed sqlalchemy libraries for db
+from sqlalchemy.ext.declarative import declarative_base  # import for declaring classes
+import logging.config  # import logging config
 
-logging.config.fileConfig("config\\logging\\local.conf")
+configPath = os.path.join("config","logging","local.conf")
+logging.config.fileConfig(configPath)
 logger = logging.getLogger("create_database_log")
 
-logger.debug('Start of create_database Script')
 
-# check if a token argument was passed
-if len(sys.argv) > 1:
-    oauth = sys.argv[1]
-else: # if no additional arguments were passed, then prompt for a token
-    oauth = getpass(prompt='Enter the OAuth Personal Token for queries:')
+def create_engine(database_name, type):
+    """Create an engine for a specific database and database type
 
-# set the token into a requests header
-headers = {
-    'Authorization': ('Bearer ' + oauth),
-}
-logger.debug('OAuth token entered')
+    Args:
+    	database_name (str): the name of the database to create
+    	type (str): the type of database to create
 
-# pull new events
-events = []
-logger.debug('Retrieving Page 1...')
-response_all = requests.get('https://www.eventbriteapi.com/v3/events/search/?categories=103&formats=5,6&location.address=chicago&location.within=50mi&sort_by=date&expand=venue,format,bookmark_info,ticket_availability,music_properties,guestlist_metrics,basic_inventory_info', headers = headers)
-results_all = json.loads(response_all.text)
-events = results_all['events']
-logger.debug('has_more_items is %s', results_all['pagination']['has_more_items'])
-page = 1
-while results_all['pagination']['has_more_items']:
-    page += 1
-    logger.debug('Retrieving Page %s...', page)
-    response_all = requests.get('https://www.eventbriteapi.com/v3/events/search/?categories=103&formats=5,6&location.address=chicago&location.within=50mi&sort_by=date&expand=venue,format,bookmark_info,ticket_availability,music_properties,guestlist_metrics,basic_inventory_info&page=' + str(page), headers = headers)
-    results_all = json.loads(response_all.text)
-    events += results_all['events']
-    logger.debug('has_more_items is %s', results_all['pagination']['has_more_items'])
-logger.info("%s pages received", page)
-logger.info("%s events pulled", len(events))
+    Returns:
+        engine (SQLAlchemy engine): the engine for working with a database
 
-# creating the engine for the database
-engine = create_engine("sqlite:///data\\events.db")
+    """
 
-# initializing the database metadata
-metadata = MetaData()
+    # generate the engine_string based on the name and database type
+    if type == "sqlite":
+        # set up sqlite connection
+        engine_string = type + ":///" + database_name
 
-# initialize the events table
-events_table = Table('events',metadata,
-              Column('id',Integer(), unique = True, nullable = False),
-               Column('name',String(255)),
-               Column('startDate',DATETIME()),
-               Column('endDate',DATETIME()),
-               Column('publishedDate',DATETIME()),
-               Column('onSaleDate',DATETIME()),
-               Column('venueId',Integer()),
-               Column('categoryId',Integer()),
-               Column('formatId',Integer()),
-               Column('inventoryType',String(30)),
-               Column('isFree',Boolean(), default = False),
-               Column('isReservedSeating',Boolean(), default = False),
-               Column('isAvailable',Boolean()),
-               Column('isSoldOut',Boolean()),
-               Column('soldOutDate',DATETIME(), default = datetime(2019,4,12,0,0,1)),
-               Column('hasWaitList',Boolean(), default = False),
-               Column('minPrice',DECIMAL(), default = 0.00),
-               Column('maxPrice',DECIMAL(), default = 0.00),
-               Column('capacity',Integer(), default = 10000),
-               Column('ageRestriction',String(30), default = 'none'),
-               Column('doorTime',String(30)),
-               Column('presentedBy',String(255)),
-               Column('isOnline',Boolean(), default = False),
-               Column('allData',JSON())
-              )
+    elif type == "mysql+pymysql":
+        # set up mysql connection
+        # the engine_string format
+        # engine_string = "{type}:///{user}:{password}@{host}:{port}/{database}"
+        user = os.environ.get("MYSQL_USER")
+        password = os.environ.get("MYSQL_PASSWORD")
+        host = os.environ.get("MYSQL_HOST")
+        port = os.environ.get("MYSQL_PORT")
+        engine_string = "{}://{}:{}@{}:{}/{}".format(type, user, password, host, port, database_name)
 
-# initialize the venues table
-venues = Table('venues',metadata,
-              Column('id',Integer(), unique = True, nullable = False),
-               Column('name',String(255)),
-               Column('city',String(40)),
-               Column('ageRestriction',String(30), default = 'none'),
-               Column('capacity',Integer(), default = 10000)
-              )
+    # if the type of database wasn't set to mysql_pymysql or sqlite, then log an error and exit
+    else:
+        logger.error("Type of database provided wasn't supported: %s", type)
+        sys.exit()
 
-# initialize the formats table
-formats = Table('formats',metadata,
-               Column('id',Integer(), unique = True, nullable = False),
-               Column('name',String(30))
-               )
+    logger.debug("Engine string is %s", engine_string)
+    # create the engine
+    engine = create_engine(engine_string)
 
-# initialize the categories table
-categories = Table('categories',metadata,
-                  Column('id',Integer(), unique = True, nullable = False),
-                  Column('name',String(30))
-                  )
+    # return the engine
+    return engine
 
-# create the tables from the metadata
-metadata.create_all(engine)
 
-# check that the tables were created
-for table in engine.table_names():
-    logger.info("Created table %s", table)
+def create_db(engine):
+    """create a database at a specified location
 
-# connect to the database
-connection = engine.connect()
+    Args:
+    	engine (SQLAlchemy engine): the engine for working with a database
 
-# create a reflection of the events table in the database
-events_table = Table('events', metadata, autoload = True, autoload_with = engine)
+    Returns:
+    	None
 
-# build a list of dictionaries with the necessary values for each event from the eventbrite pull
-events_list = [{'id':int(event['id']),
-                'name':event['name']['text'],
-                'startDate':datetime.fromisoformat(event['start']['local']),
-                'endDate':datetime.fromisoformat(event['end']['local']),
-                'publishedDate':datetime.fromisoformat(event['published'][0:19]),
-                'onSaleDate': datetime.fromisoformat(event['ticket_availability']['start_sales_date']['local']) if event['ticket_availability']['start_sales_date'] is not None else datetime.fromisoformat(event['published'][0:19]),
-                'venueId':int(event['venue_id']),
-                'categoryId': int(event['subcategory_id']) if event['subcategory_id'] is not None else None,
-                'formatId':int(event['format_id']),
-                'inventoryType':event['inventory_type'],
-                'isFree':event['is_free'],
-                'isReservedSeating':event['is_reserved_seating'],
-                'isAvailable':event['ticket_availability']['has_available_tickets'],
-                'isSoldOut':event['ticket_availability']['is_sold_out'],
-                'soldOutDate': datetime.now() if event['ticket_availability']['is_sold_out'] else datetime(2019,4,12,0,0,1),
-                'hasWaitList':event['ticket_availability']['waitlist_available'],
-                'minPrice': float(event['ticket_availability']['minimum_ticket_price']['major_value']) if event['ticket_availability']['minimum_ticket_price'] is not None else None,
-                'maxPrice': float(event['ticket_availability']['maximum_ticket_price']['major_value']) if event['ticket_availability']['maximum_ticket_price'] is not None else None,
-                'capacity': int(event['capacity']) if event['capacity'] is not None else 10000,
-                'ageRestriction':event['music_properties']['age_restriction'],
-                'doorTime':event['music_properties']['door_time'],
-                'presentedBy':event['music_properties']['presented_by'],
-                'isOnline':event['online_event'],
-                'allData':event}
-               for event in events]
+    """
+    logger.debug("Creating a database at %s", engine.url)
 
-#check that all events are populated, show where an issue might crop up
-counter = 1
-for event in events_list:
-    logger.debug("Loaded Event %s", counter)
-    counter += 1
-    logger.debug("Event start date: %s ", event['startDate'])
-    logger.debug("Event end date: %s ", event['endDate'])
-    logger.debug("Event published date: %s ", event['publishedDate'])
-    logger.debug("Event on sale date: %s ", event['onSaleDate'])
-    logger.debug("Event min price: %s ", event['minPrice'])
-    logger.debug("Event category: %s ", event['categoryId'])
+    Base = declarative_base()
 
-# insert statement for the events table
-stmt = insert(events_table)
+    logger.debug("Creating the events table")
+    class Event(Base):
+        """Create a data model for the events table """
+        __tablename__ = 'events'
+        id = Column(Integer(), primary_key=True)
+        name = Column(String(255), unique=False, nullable=False)
+        startDate = Column(DATETIME(), unique=False, nullable=False)
+        endDate = Column(DATETIME(), unique=False, nullable=True)
+        publishedDate = Column(DATETIME(), unique=False, nullable=True)
+        onSaleDate = Column(DATETIME(), unique=False, nullable=True)
+        venueId = Column(Integer(), unique=False, nullable=False)
+        categoryId = Column(Integer(), unique=False, nullable=False)
+        formatId = Column(Integer(), unique=False, nullable=False)
+        inventoryType = Column(String(30), unique=False, nullable=True)
+        isFree = Column(Boolean(), unique=False, nullable=True, default=False)
+        isReservedSeating = Column(Boolean(), unique=False, nullable=True, default=False)
+        isAvailable = Column(Boolean(), unique=False, nullable=True, default=True)
+        isSoldOut = Column(Boolean(), unique=False, nullable=True, default=False)
+        soldOutDate = Column(DATETIME(), unique=False, nullable=True, default=datetime(2019, 4, 12, 0, 0, 1))
+        hasWaitList = Column(Boolean(), unique=False, nullable=True, default=False)
+        minPrice = Column(DECIMAL(), unique=False, nullable=True, default=0.00)
+        maxPrice = Column(DECIMAL(), unique=False, nullable=True, default=0.00)
+        capacity = Column(Integer(), unique=False, nullable=True, default=10000)
+        ageRestriction = Column(String(30), unique=False, nullable=True, default='none')
+        doorTime = Column(String(30), unique=False, nullable=True)
+        presentedBy = Column(String(255), unique=False, nullable=True)
+        isOnline = Column(Boolean(), unique=False, nullable=True, default = False)
 
-# execute the insert into events
-result_proxy = connection.execute(stmt, events_list)
+        def __repr__(self):
+            return '<Event %r>' % self.id
 
-# verify that the rows were inserted
-logger.info("Inserted into Events Table %s events", result_proxy.rowcount)
 
-# create a reflection of the venues table in the database
-venues_table = Table('venues', metadata, autoload = True, autoload_with = engine)
+    logger.debug("Creating the venues table")
+    class Venue(Base):
+        """Create a data model for the venues table """
+        __tablename__ = 'venues'
+        id = Column(Integer(), primary_key=True)
+        name = Column(String(255), unique=False, nullable=False)
+        city = Column(String(40), unique=False, nullable=True)
+        ageRestriction = Column(String(30), unique=False, nullable=True)
+        capacity = Column(Integer, unique=False, nullable=True, default=10000)
 
-# build a list of dictionaries with the necessary values for each venue from the eventbrite pull
-venues_list = []  # generate a blank venues list
-venues_ids_list = []  # generate a blank list of venues ids
-logger.debug("Blank venues list created")
-for event in events:  # loop through each event
-    logger.debug("Event %s checked", event['id'])
-    if event['venue_id'] not in venues_ids_list:  # if the venue id for the event hasn't been encountered yet
-        venues_ids_list.append(event['venue_id'])  # add the id to the venues ids list
+        def __repr__(self):
+            return '<Venue %r>' % self.id
 
-        # create a dictionary for the venue info passed by the event pull
-        venue = {'id':int(event['venue_id']),
-                'name':event['venue']['name'],
-                'city':event['venue']['address']['city'],
-                'ageRestriction': event['venue']['age_restriction'],
-                'capacity': int(event['venue']['capacity']) if event['venue']['capacity'] is not None else 10000
-                }
 
-        venues_list.append(venue)  # append the venue dictionary to the venues list
+    logger.debug("Creating the formats table")
+    class Format(Base):
+        """Create a data model for the formats table """
+        __tablename__ = 'formats'
+        id = Column(Integer(), primary_key=True)
+        name = Column(String(30), unique=False, nullable=False)
 
-# insert statement for the venues table
-stmt = insert(venues_table)
+        def __repr__(self):
+            return '<Format %r>' % self.id
 
-# execute the insert into venues
-result_proxy = connection.execute(stmt, venues_list)
 
-# verify that the rows were inserted
-logger.info("Inserted into Venues Table %s venues", result_proxy.rowcount)
+    logger.debug("Creating the categories table")
+    class Category(Base):
+        """Create a data model for the categories table """
+        __tablename__ = 'categories'
+        id = Column(Integer(), primary_key=True)
+        name = Column(String(30), unique=False, nullable=False)
 
-# create a reflection of the categories table in the database
-categories_table = Table('categories', metadata, autoload = True, autoload_with = engine)
+        def __repr__(self):
+            return '<Category %r>' % self.id
 
-# pull subcategories
-subcategories = []
-logger.debug('Retrieving subcategories...')
-response_cats = requests.get('https://www.eventbriteapi.com/v3/subcategories/', headers = headers)
-results_cats = json.loads(response_cats.text)
-subcategories = results_cats['subcategories']
-logger.debug('has_more_items is %s', results_cats['pagination']['has_more_items'])
-page = 1
-while results_cats['pagination']['has_more_items']:
-    page += 1
-    logger.debug('Retrieving Page %s...', page)
-    response_cats = requests.get('https://www.eventbriteapi.com/v3/subcategories/?continuation=' + results_cats['pagination']['continuation'], headers = headers)
-    results_cats = json.loads(response_cats.text)
-    subcategories += results_cats['subcategories']
-    logger.debug('has_more_items is %s', results_all['pagination']['has_more_items'])
-logger.info("%s pages received", page)
-logger.info("%s subcategories pulled", len(subcategories))
+    try:
+        # create the tables
+        Base.metadata.create_all(engine)
 
-# build a list of dictionaries with the necessary values for each subcategory from the eventbrite pull
-subs_list = [{'id':int(sub['id']),
-              'name':sub['name']}
-             for sub in subcategories]
+        # check that the tables were created
+        for table in engine.table_names():
+            logger.info("Created table %s", table)
+    except Exception as e:
+        logger.error("Could not create the database: %s", e)
 
-# insert statement for the categories table
-stmt = insert(categories_table)
 
-# execute the insert into categories
-result_proxy = connection.execute(stmt, subs_list)
+def run_create(args):
+    """runs the creation script"""
+    try:  # opens the specified config file
+        with open(args.config, "r") as f:
+            config = yaml.load(f, Loader=yaml.Loader)
+    except Exception as e:
+        logger.error('Error loading the config file: %s, be sure you specified a config.yml file', e)
+        sys.exit()
 
-# verify that the rows were inserted
-logger.info("Inserted into Categories Table %s categories", result_proxy.rowcount)
+    if config["create_database"]["how"] == "rds":
+        # if a type argument was passed, then use it for calling the appropriate database type
+        if args.type is not None:
+            type = args.type
 
-# create a reflection of the formats table in the database
-formats_table = Table('formats', metadata, autoload = True, autoload_with = engine)
+        # if no type argument was passed, then look for it in the config file
+        elif "create_database" in config and "rds_database_type" in config["create_database"]:
+            type = config["create_database"]["rds_database_type"]
 
-# pull formats
-formats = []
-logger.debug('Retrieving formats...')
-response_formats = requests.get('https://www.eventbriteapi.com/v3/formats/', headers = headers)
-results_formats = json.loads(response_formats.text)
-formats = results_formats['formats']
-logger.info("%s formats pulled", len(formats))
+        else:  # if no additional arguments were passed and the config file didn't have it, then log the error and exit
+            logger.error('Database type must be pass in arguments or in the config file')
+            sys.exit()
 
-# build a list of dictionaries with the necessary values for each subcategory from the eventbrite pull
-formats_list = [{'id':int(form['id']),
-                'name':form['name']}
-               for form in formats]
+        # if a database_name argument was passed, then use it for calling the appropriate database
+        if args.database_name is not None:
+            db_name = args.database_name
 
-# insert statement for the formats table
-stmt = insert(formats_table)
+        # if no database_name argument was passed, then look for it in the config file
+        elif "create_database" in config and "rds_database_name" in config["create_database"]:
+            db_name = config["create_database"]["rds_database_name"]
 
-# execute the insert into formats
-result_proxy = connection.execute(stmt, formats_list)
+        else:  # if no additional arguments were passed and the config file didn't have it, then log the error and exit
+            logger.error('Database name must be pass in arguments or in the config file')
+            sys.exit()
 
-# verify that the rows were inserted
-logger.info("Inserted into Formats Table %s formats", result_proxy.rowcount)
+        # create the engine for the database and type
+        engine = create_engine(db_name, type)
 
-# close the connection to the database
-connection.close()
-logger.debug('DB connection closed')
+        # create the database schema in the engine
+        create_db(engine)
+
+    if config["create_database"]["how"] == "local":
+        # if a type argument was passed, then use it for calling the appropriate database type
+        if args.type is not None:
+            type = args.type
+
+        # if no type argument was passed, then look for it in the config file
+        elif "create_database" in config and "local_database_type" in config["create_database"]:
+            type = config["create_database"]["local_database_type"]
+
+        else:  # if no additional arguments were passed and the config file didn't have it, then log the error and exit
+            logger.error('Database type must be pass in arguments or in the config file')
+            sys.exit()
+
+        # if a database_name argument was passed, then use it for calling the appropriate database
+        if args.database_name is not None:
+            db_name = args.database_name
+
+        # if no database_name argument was passed, then look for it in the config file
+        elif "create_database" in config and "local_database_name" in config["create_database"]:
+            db_name = os.path.join(config["create_database"]["local_database_folder"],config["create_database"]["local_database_name"])
+
+        else:  # if no additional arguments were passed and the config file didn't have it, then log the error and exit
+            logger.error('Database name must be pass in arguments or in the config file')
+            sys.exit()
+
+        # create the engine for the database and type
+        engine = create_engine(db_name, type)
+
+        # create the database schema in the engine
+        create_db(engine)
+
+if __name__ == '__main__':
+    logger.debug('Start of create_database Script')
+
+    # if this code is run as a script, then parse arguments for the location of the config and, optionally, the type and location of the db
+    parser = argparse.ArgumentParser(description="create database")
+    parser.add_argument('--config', help='path to yaml file with configurations')
+    parser.add_argument('--type', default=None, help="type of database to create, 'sqlite' or 'mysql+pymysql'")
+    parser.add_argument('--database_name', default=None, help="location where database is to be created (including name.db)")
+
+    args = parser.parse_args()
+
+    # run the creation based on the parsed arguments
+    run_create(args)
