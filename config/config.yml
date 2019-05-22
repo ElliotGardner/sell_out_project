@@ -11,4 +11,4 @@ create_database:
   local_database_folder: data
   local_database_type: sqlite
   local_database_name: events_test.db
-  how: rds
+  how: local

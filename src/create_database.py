@@ -7,25 +7,64 @@ from sqlalchemy import create_engine, Column, String, Integer, Boolean, DATETIME
 from sqlalchemy.ext.declarative import declarative_base  # import for declaring classes
 import logging.config  # import logging config
 
-logging.config.fileConfig("config\\logging\\local.conf")
+configPath = os.path.join("config","logging","local.conf")
+logging.config.fileConfig(configPath)
 logger = logging.getLogger("create_database_log")
 
 
-def create_db(database_name, type):
-    """create a database at a specified location
+def create_engine(database_name, type):
+    """Create an engine for a specific database and database type
 
     Args:
     	database_name (str): the name of the database to create
     	type (str): the type of database to create
 
     Returns:
+        engine (SQLAlchemy engine): the engine for working with a database
+
+    """
+
+    # generate the engine_string based on the name and database type
+    if type == "sqlite":
+        # set up sqlite connection
+        engine_string = type + ":///" + database_name
+
+    elif type == "mysql+pymysql":
+        # set up mysql connection
+        # the engine_string format
+        # engine_string = "{type}:///{user}:{password}@{host}:{port}/{database}"
+        user = os.environ.get("MYSQL_USER")
+        password = os.environ.get("MYSQL_PASSWORD")
+        host = os.environ.get("MYSQL_HOST")
+        port = os.environ.get("MYSQL_PORT")
+        engine_string = "{}://{}:{}@{}:{}/{}".format(type, user, password, host, port, database_name)
+
+    # if the type of database wasn't set to mysql_pymysql or sqlite, then log an error and exit
+    else:
+        logger.error("Type of database provided wasn't supported: %s", type)
+        sys.exit()
+
+    logger.debug("Engine string is %s", engine_string)
+    # create the engine
+    engine = create_engine(engine_string)
+
+    # return the engine
+    return engine
+
+
+def create_db(engine):
+    """create a database at a specified location
+
+    Args:
+    	engine (SQLAlchemy engine): the engine for working with a database
+
+    Returns:
     	None
 
     """
-    logger.debug("Creating a %s database at %s", type, database_name)
+    logger.debug("Creating a database at %s", engine.url)
 
     Base = declarative_base()
-
 
     logger.debug("Creating the events table")
     class Event(Base):
@@ -54,7 +93,6 @@ def create_db(database_name, type):
         doorTime = Column(String(30), unique=False, nullable=True)
         presentedBy = Column(String(255), unique=False, nullable=True)
         isOnline = Column(Boolean(), unique=False, nullable=True, default = False)
-        allData = Column(JSON(), unique=False, nullable=False)
 
         def __repr__(self):
             return '<Event %r>' % self.id
@@ -96,25 +134,6 @@ def create_db(database_name, type):
             return '<Category %r>' % self.id
 
     try:
-        if type == "sqlite":
-            # set up sqlite connection
-            engine_string = type + ":///" + database_name
-
-        if type == "mysql+pymysql":
-            # set up mysql connection
-            # the engine_string format
-            # engine_string = "{conn_type}:///{user}:{password}@{host}:{port}/{database}"
-            conn_type = type
-            user = os.environ.get("MYSQL_USER")
-            password = os.environ.get("MYSQL_PASSWORD")
-            host = os.environ.get("MYSQL_HOST")
-            port = os.environ.get("MYSQL_PORT")
-            engine_string = "{}://{}:{}@{}:{}/{}".format(conn_type, user, password, host, port, database_name)
-
-        logger.debug("Engine string is %s", engine_string)
-        # create the engine
-        engine = create_engine(engine_string)
-
         # create the tables
         Base.metadata.create_all(engine)
 
@@ -159,7 +178,11 @@ def run_create(args):
             logger.error('Database name must be pass in arguments or in the config file')
             sys.exit()
 
-        create_db(db_name, type)
+        # create the engine for the database and type
+        engine = create_engine(db_name, type)
+
+        # create the database schema in the engine
+        create_db(engine)
 
     if config["create_database"]["how"] == "local":
         # if a type argument was passed, then use it for calling the appropriate database type
@@ -186,7 +209,11 @@ def run_create(args):
             logger.error('Database name must be pass in arguments or in the config file')
             sys.exit()
 
-        create_db(db_name, type)
+        # create the engine for the database and type
+        engine = create_engine(db_name, type)
+
+        # create the database schema in the engine
+        create_db(engine)
 
 if __name__ == '__main__':
     logger.debug('Start of create_database Script')
@@ -194,7 +221,7 @@ if __name__ == '__main__':
     # if this code is run as a script, then parse arguments for the location of the config and, optionally, the type and location of the db
     parser = argparse.ArgumentParser(description="create database")
     parser.add_argument('--config', help='path to yaml file with configurations')
-    parser.add_argument('--type', default=None, help="type of database to create")
+    parser.add_argument('--type', default=None, help="type of database to create, 'sqlite' or 'mysql+pymysql'")
     parser.add_argument('--database_name', default=None, help="location where database is to be created (including name.db)")
 
     args = parser.parse_args()

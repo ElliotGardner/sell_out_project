@@ -9,7 +9,8 @@ import logging.config  # import logging config
 import boto3  # interact with s3
 import botocore.exceptions # an error category for S3 functionality
 
-logging.config.fileConfig("config\\logging\\local.conf")
+configPath = os.path.join("config","logging","local.conf")
+logging.config.fileConfig(configPath)
 logger = logging.getLogger("ingest_data_log")
 
 
@@ -67,6 +68,10 @@ def API_request(API_url, page_num=1, headers=None):
         full_url,
         headers=headers)
     logger.debug("Received response of %s", response.status_code)
+    # if a bad response (not 200) is received, then stop the load
+    if response.status_code != requests.codes.ok:
+        logger.error("Bad Response!")
+        sys.exit()
     results = json.loads(response.text)
     try:
         logger.debug("Received results containing %s events", len(results['events']))
@@ -81,7 +86,7 @@ def API_request(API_url, page_num=1, headers=None):
     return results
 
 
-def save_JSON_s3(JSON_data, filename, bucket, folder = "", public = False):
+def save_JSON_s3(JSON_data, filename, bucket, folder = "", public=False):
     """saves a JSON file to an s3 bucket under a given name
 
     Args:
@@ -223,7 +228,11 @@ def run_ingest(args):
         elif config["ingest_data"]["how"] == "local":
             s3_save = False
             local_save = True
-        else:  # if neither "both" nor "s3" nor "local" was specified, log an error and exit
+        # if the how method is 'test' then don't save, but continue to call the requests
+        elif config["ingest_data"]["how"] == "test":
+            s3_save = False
+            local_save = False
+        else:  # if neither "both" nor "s3" nor "local" nor "test" was specified, log an error and exit
             logger.error("'how' in the 'ingest_data' within the config file needs to specify 'both', 's3', or 'local'")
             sys.exit()
 
