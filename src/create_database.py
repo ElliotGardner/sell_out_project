@@ -12,7 +12,7 @@ logging.config.fileConfig(configPath)
 logger = logging.getLogger("create_database_log")
 
 
-def create_engine(database_name, type):
+def create_db_engine(database_name, type):
     """Create an engine for a specific database and database type
 
     Args:
@@ -70,7 +70,7 @@ def create_db(engine):
     class Event(Base):
         """Create a data model for the events table """
         __tablename__ = 'events'
-        id = Column(Integer(), primary_key=True)
+        id = Column(String(12), primary_key=True)
         name = Column(String(255), unique=False, nullable=False)
         startDate = Column(DATETIME(), unique=False, nullable=False)
         endDate = Column(DATETIME(), unique=False, nullable=True)
@@ -93,6 +93,7 @@ def create_db(engine):
         doorTime = Column(String(30), unique=False, nullable=True)
         presentedBy = Column(String(255), unique=False, nullable=True)
         isOnline = Column(Boolean(), unique=False, nullable=True, default = False)
+        lastInfoDate = Column(DATETIME(), unique=False, nullable=True)
 
         def __repr__(self):
             return '<Event %r>' % self.id
@@ -103,7 +104,7 @@ def create_db(engine):
         """Create a data model for the venues table """
         __tablename__ = 'venues'
         id = Column(Integer(), primary_key=True)
-        name = Column(String(255), unique=False, nullable=False)
+        name = Column(String(255), unique=False, nullable=True)
         city = Column(String(40), unique=False, nullable=True)
         ageRestriction = Column(String(30), unique=False, nullable=True)
         capacity = Column(Integer, unique=False, nullable=True, default=10000)
@@ -113,9 +114,9 @@ def create_db(engine):
 
 
     logger.debug("Creating the formats table")
-    class Format(Base):
+    class Frmat(Base):
         """Create a data model for the formats table """
-        __tablename__ = 'formats'
+        __tablename__ = 'frmats'
         id = Column(Integer(), primary_key=True)
         name = Column(String(30), unique=False, nullable=False)
 
@@ -153,14 +154,14 @@ def run_create(args):
         logger.error('Error loading the config file: %s, be sure you specified a config.yml file', e)
         sys.exit()
 
-    if config["create_database"]["how"] == "rds":
+    if config["database_info"]["how"] == "rds":
         # if a type argument was passed, then use it for calling the appropriate database type
         if args.type is not None:
             type = args.type
 
         # if no type argument was passed, then look for it in the config file
-        elif "create_database" in config and "rds_database_type" in config["create_database"]:
-            type = config["create_database"]["rds_database_type"]
+        elif "database_info" in config and "rds_database_type" in config["database_info"]:
+            type = config["database_info"]["rds_database_type"]
 
         else:  # if no additional arguments were passed and the config file didn't have it, then log the error and exit
             logger.error('Database type must be pass in arguments or in the config file')
@@ -171,27 +172,27 @@ def run_create(args):
             db_name = args.database_name
 
         # if no database_name argument was passed, then look for it in the config file
-        elif "create_database" in config and "rds_database_name" in config["create_database"]:
-            db_name = config["create_database"]["rds_database_name"]
+        elif "database_info" in config and "rds_database_name" in config["database_info"]:
+            db_name = config["database_info"]["rds_database_name"]
 
         else:  # if no additional arguments were passed and the config file didn't have it, then log the error and exit
             logger.error('Database name must be pass in arguments or in the config file')
             sys.exit()
 
         # create the engine for the database and type
-        engine = create_engine(db_name, type)
+        engine = create_db_engine(db_name, type)
 
         # create the database schema in the engine
         create_db(engine)
 
-    if config["create_database"]["how"] == "local":
+    elif config["database_info"]["how"] == "local":
         # if a type argument was passed, then use it for calling the appropriate database type
         if args.type is not None:
             type = args.type
 
         # if no type argument was passed, then look for it in the config file
-        elif "create_database" in config and "local_database_type" in config["create_database"]:
-            type = config["create_database"]["local_database_type"]
+        elif "database_info" in config and "local_database_type" in config["database_info"]:
+            type = config["database_info"]["local_database_type"]
 
         else:  # if no additional arguments were passed and the config file didn't have it, then log the error and exit
             logger.error('Database type must be pass in arguments or in the config file')
@@ -202,18 +203,22 @@ def run_create(args):
             db_name = args.database_name
 
         # if no database_name argument was passed, then look for it in the config file
-        elif "create_database" in config and "local_database_name" in config["create_database"]:
-            db_name = os.path.join(config["create_database"]["local_database_folder"],config["create_database"]["local_database_name"])
+        elif "database_info" in config and "local_database_name" in config["database_info"]:
+            db_name = os.path.join(config["database_info"]["local_database_folder"],config["database_info"]["local_database_name"])
 
         else:  # if no additional arguments were passed and the config file didn't have it, then log the error and exit
             logger.error('Database name must be pass in arguments or in the config file')
             sys.exit()
 
         # create the engine for the database and type
-        engine = create_engine(db_name, type)
+        engine = create_db_engine(db_name, type)
 
         # create the database schema in the engine
         create_db(engine)
+
+    else:
+        logger.error('Method of database storage (should be "rds" or "local") in config file not supported')
+        sys.exit()
 
 if __name__ == '__main__':
     logger.debug('Start of create_database Script')
