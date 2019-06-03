@@ -22,6 +22,7 @@
                <th>Sell Out Prediction</th>
                 <th>Confidence (Percent)</th>
                <th>How Many Days Before</th>
+                <th>Buy Tickets (before it's too late!)</th>
             </tr>
          </thead>
 
@@ -36,6 +37,7 @@
                    <td>{{ _s.willSellOut }}</td>
                    <td>{{ _s.confidence }}</td>
                    <td>{{ _s.howFarOut }}</td>
+                   <td>{{ _e.url }}</td>
                </tr>
             {% endfor %}
          </tbody>
