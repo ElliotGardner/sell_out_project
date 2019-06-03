@@ -1,14 +1,33 @@
 ingest_data:
-  API_url: 'https://www.eventbriteapi.com/v3/events/search/?categories=103&formats=5,6&location.address=chicago&location.within=50mi&sort_by=date&expand=venue,format,bookmark_info,ticket_availability,music_properties,guestlist_metrics,basic_inventory_info'
+  API_url: 'https://www.eventbriteapi.com/v3/events/search/?categories=103&location.address=chicago&location.within=50mi&sort_by=date&expand=venue,format,bookmark_info,ticket_availability,music_properties,guestlist_metrics,basic_inventory_info'
   how: both
   output_folder: data
   s3_bucket: emg8426.msia423.project
   s3_public: False
 
-create_database:
+database_info:
   rds_database_type: mysql+pymysql
   rds_database_name: msia423
   local_database_folder: data
   local_database_type: sqlite
   local_database_name: events_test.db
-  how: local
+  how: rds
+
+populate_database:
+  initial_populate_format_categories:
+    frmats_URL: 'https://www.eventbriteapi.com/v3/formats/'
+    categories_URL: 'https://www.eventbriteapi.com/v3/subcategories/?'
+  initial_populate_events_venues:
+    raw_data_location: 'emg8426.msia423.project'
+    location_type: s3
+
+update_database:
+  update_format_categories:
+    frmats_URL: 'https://www.eventbriteapi.com/v3/formats/'
+    categories_URL: 'https://www.eventbriteapi.com/v3/subcategories/?'
+  update_events_venues:
+    raw_data_location: 'emg8426.msia423.project'
+    location_type: s3
+
+train_model:
+  model_type: linear

@@ -309,3 +309,5 @@ if __name__ == '__main__':
 
     # run the ingest based on the parsed arguments
     run_ingest(args)
+
+    print("Done!")
