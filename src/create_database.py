@@ -93,7 +93,9 @@ def create_db(engine):
         doorTime = Column(String(30), unique=False, nullable=True)
         presentedBy = Column(String(255), unique=False, nullable=True)
         isOnline = Column(Boolean(), unique=False, nullable=True, default = False)
+        url = Column(String(255), unique=False, nullable=False)
         lastInfoDate = Column(DATETIME(), unique=False, nullable=True)
+
 
         def __repr__(self):
             return '<Event %r>' % self.id
