@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link href="static/basic.css" rel="stylesheet">
+</head>
+
+<body>
+    <h3>
+         <a href = "{{ url_for('index') }}">Sell Out Project: Will It Sell Out?</a>
+    </h3>
+
+    <hr/>
+    <table>
+         <thead>
+            <tr>
+               <th>Event ID</th>
+               <th>Event Name</th>
+               <th>Event Date</th>
+                <th>Venue</th>
+               <th>City</th>
+               <th>Sell Out Prediction</th>
+                <th>Confidence (Percent)</th>
+               <th>How Many Days Before</th>
+            </tr>
+         </thead>
+
+         <tbody>
+            {% for _e, _v, _s in results %}
+               <tr>
+                   <td>{{ _e.id }}</td>
+                   <td>{{ _e.name }}</td>
+                   <td>{{ _e.startDate }}</td>
+                   <td>{{ _v.name }}</td>
+                   <td>{{ _v.city }}</td>
+                   <td>{{ _s.willSellOut }}</td>
+                   <td>{{ _s.confidence }}</td>
+                   <td>{{ _s.howFarOut }}</td>
+               </tr>
+            {% endfor %}
+         </tbody>
+      </table>
+
+</body>
+</html>

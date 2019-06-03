@@ -28,3 +28,6 @@ update_database:
   update_events_venues:
     raw_data_location: 'emg8426.msia423.project'
     location_type: s3
+
+train_model:
+  model_type: linear

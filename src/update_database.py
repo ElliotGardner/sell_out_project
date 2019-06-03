@@ -4,6 +4,7 @@ import argparse  # import argparse for getting arguments from the command line
 import yaml  # import yaml for pulling config file
 import json  # import json for reading JSON files from the s3 raw data bucket
 import boto3  # import boto3 for access s3
+import pandas as pd
 from datetime import datetime  # import datetime for formatting of timestamps
 from sqlalchemy.orm import sessionmaker  # import the sessionmaker for adding data to the database
 from sqlalchemy.ext.automap import automap_base # import for declaring classes
@@ -350,6 +351,61 @@ def update_category(engine, category):
     session.close()
 
 
+# helper function for comparing events and venues
+def event_to_event_dict(event):
+    event_dict = {}
+    event_dict['id'] = event['id']
+    event_dict['name'] = event['name']['text']
+    event_dict['startDate'] = datetime.fromisoformat(event['start']['local'])
+    event_dict['endDate'] = datetime.fromisoformat(event['end']['local'])
+    event_dict['publishedDate'] = datetime.fromisoformat(event['published'][0:19])
+    event_dict['onSaleDate'] = datetime.fromisoformat(
+        event['ticket_availability']['start_sales_date']['local']) if event['ticket_availability'][
+                                                                                                           'start_sales_date'] is not None else datetime.fromisoformat(
+        event['published'][0:19])
+    event_dict['venueId'] = int(event['venue_id'])
+    event_dict['categoryId'] = int(event['subcategory_id']) if event[
+                                                                   'subcategory_id'] is not None else 3999  # this is the "music other" subcategory
+    event_dict['formatId'] = int(event['format_id']) if event[
+                                                            'format_id'] is not None else 100  # this is the "other" format
+    event_dict['inventoryType'] = event['inventory_type']
+    event_dict['isFree'] = int(event['is_free'])
+    event_dict['isReservedSeating'] = int(event['is_reserved_seating'])
+    event_dict['isAvailable'] = int(event['ticket_availability']['has_available_tickets'])
+    event_dict['isSoldOut'] = int(event['ticket_availability']['is_sold_out'])
+    event_dict['hasWaitList'] = int(event['ticket_availability']['waitlist_available'])
+    event_dict['minPrice'] = float(event['ticket_availability']['minimum_ticket_price']['major_value']) if \
+        event['ticket_availability']['minimum_ticket_price'] is not None else None
+    event_dict['maxPrice'] = float(event['ticket_availability']['maximum_ticket_price']['major_value']) if \
+        event['ticket_availability']['maximum_ticket_price'] is not None else None
+    event_dict['capacity'] = int(event['capacity']) if event['capacity'] is not None else 10000
+    event_dict['ageRestriction'] = event['music_properties']['age_restriction']
+    event_dict['doorTime'] = event['music_properties']['door_time']
+    event_dict['presentedBy'] = event['music_properties']['presented_by']
+    event_dict['isOnline'] = int(event['online_event'])
+
+    return event_dict
+
+def event_to_venue_dict(event):
+    venue_dict = {}
+    venue_dict['id'] = int(event['venue_id'])
+    if event['venue'] is not None:
+        venue_dict['name'] = event['venue']['name']
+        venue_dict['city'] = event['venue']['address']['city']
+        if event['venue']['capacity'] is not None:
+            venue_dict['capacity'] = int(event['venue']['capacity'])
+        else:
+            venue_dict['capacity'] = 10000
+        venue_dict['ageRestriction'] = event['venue']['age_restriction']
+    else:
+        venue_dict['name'] = None
+        venue_dict['city'] = None
+        venue_dict['capacity'] = None
+        venue_dict['ageRestriction'] = None
+
+    return venue_dict
+
+
 def update_format_categories(engine, frmats_URL, categories_URL, headers=None):
     """a function for updating a set of formats and categories into a database
 
@@ -572,6 +628,9 @@ def update_events_venues(engine, raw_data_location, location_type):
                     # initialize a list of objects to add to the database
                     objects_to_add = []
 
+                    ###### what if I pulled all the data for the events whose ID matched those in the JSON
+                    ###### then compared each event in memory, then only updated those which had new info
+
                     # initialize a list of venue ids added to prevent attempting to add the same venue multiple times
                     new_venue_ids = []
 
@@ -580,16 +639,35 @@ def update_events_venues(engine, raw_data_location, location_type):
                     event_ids = {entity[0]: "" for entity in event_ids}
                     logger.debug('%s event ids retrieved', len(event_ids))
 
+                    # pull the current events dataframe
+                    current_events = pd.read_sql('SELECT * FROM events', engine)
+                    current_events = current_events.drop(columns=['lastInfoDate', 'soldOutDate'])
+                    current_events['startDate'] = current_events['startDate'].apply(lambda x: x.to_pydatetime())
+                    current_events['endDate'] = current_events['endDate'].apply(lambda x: x.to_pydatetime())
+                    current_events['publishedDate'] = current_events['publishedDate'].apply(lambda x: x.to_pydatetime())
+                    current_events['onSaleDate'] = current_events['onSaleDate'].apply(lambda x: x.to_pydatetime())
+
                     venue_ids = session.query(Venue.id).all()
                     venue_ids = {entity[0]: "" for entity in venue_ids}
                     logger.debug('%s venue ids retrieved', len(venue_ids))
+
+                    # pull the current venues dataframe
+                    current_venues = pd.read_sql('SELECT * FROM venues', engine)
 
                     # for each event in the events list of the output, check the event and venue
                     for event in output['events']:
                         # if the event id is in the current list, update it
                         if event['id'] in event_ids.keys():
-                            update_event(engine, event, output['PullTime'])
-                            num_events_updated += 1
+                            event_dict = event_to_event_dict(event)
+
+                            # compare the event row to the corresponding row in the current events dataframe from the database
+                            if list(current_events[current_events['id'] == event['id']].to_dict(
+                                    'index').values())[0] != event_dict:
+                                # if the entries are different, then update the feature
+                                update_event(engine, event, output['PullTime'])
+                                num_events_updated += 1
+                            else:
+                                logger.debug('Event %s is the same', event['id'])
                         # otherwise, create the event and add it to the list of objects to add
                         else:
                             objects_to_add.append(create_event(engine, event, output['PullTime']))
@@ -597,8 +675,15 @@ def update_events_venues(engine, raw_data_location, location_type):
 
                         # if the venue_id is in the current list, update it
                         if int(event['venue_id']) in venue_ids.keys():
-                            update_venue(engine, event)
-                            num_venues_updated += 1
+                            venue_dict = event_to_venue_dict(event)
+
+                            # compare the venue row to the corresponding row in the current venues dataframe from the database
+                            if list(current_venues[current_venues['id'] == int(event['venue_id'])].to_dict('index').values())[0] != venue_dict:
+                                # if the entries are different, then update the feature
+                                update_venue(engine, event)
+                                num_venues_updated += 1
+                            else:
+                                logger.debug('Venue %s is the same', event['venue_id'])
                         # otherwise, create the venue and add it to the list of objects to add
                         elif int(event['venue_id']) not in new_venue_ids:
                             objects_to_add.append(create_venue(engine, event))
@@ -632,6 +717,7 @@ def update_events_venues(engine, raw_data_location, location_type):
     session.commit()
     logger.info("%s objects added", overall_objects_added)
     session.close()
+
 
 def run_update(args):
     """runs the update script"""
