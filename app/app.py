@@ -1,7 +1,7 @@
 import traceback
 from flask import render_template, request, redirect, url_for
 import logging.config
-import datetime
+from datetime import datetime
 
 import os
 
