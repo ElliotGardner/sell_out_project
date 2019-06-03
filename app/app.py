@@ -58,7 +58,7 @@ def index():
     """
 
     try:
-        results = session.query(Event, Venue, Score).join(Venue, Venue.id==Event.venueId).join(Score, Score.event_id==Event.id).filter(Event.startDate >= datetime.today()).limit(app.config["MAX_ROWS_SHOW"]).all()
+        results = session.query(Event, Venue, Score).join(Venue, Venue.id==Event.venueId).join(Score, Score.event_id==Event.id).filter(Event.startDate >= datetime.today()).order_by(Event.startDate).limit(app.config["MAX_ROWS_SHOW"]).all()
         logger.debug("Index page accessed")
         return render_template('index.html', results=results)
     except:
