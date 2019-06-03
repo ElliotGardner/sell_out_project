@@ -62,6 +62,7 @@ def create_event(engine, event, infoDate):
                 doorTime=event['music_properties']['door_time'],
                 presentedBy=event['music_properties']['presented_by'],
                 isOnline=event['online_event'],
+                url=event['url'],
                 lastInfoDate=datetime.strptime(infoDate, '%y-%m-%d-%H-%M-%S'))
     logger.debug("Event %s was created", event_to_add.id)
 
