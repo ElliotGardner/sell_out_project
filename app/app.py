@@ -10,6 +10,7 @@ from flask_sqlalchemy import SQLAlchemy
 
 from sqlalchemy.orm import sessionmaker  # import the sessionmaker for adding data to the database
 from sqlalchemy.ext.automap import automap_base # import for declaring classes
+from sqlalchemy.sql.expression import func
 
 # Initialize the Flask application
 app = Flask(__name__)
@@ -58,7 +59,8 @@ def index():
     """
 
     try:
-        results = session.query(Event, Venue, Score).join(Venue, Venue.id==Event.venueId).join(Score, Score.event_id==Event.id).filter(Event.startDate >= datetime.today()).order_by(Event.startDate).limit(app.config["MAX_ROWS_SHOW"]).all()
+        #results = session.query(Event, Venue, Score).join(Venue, Venue.id==Event.venueId).join(Score, Score.event_id==Event.id).filter(Event.startDate >= datetime.today()).group_by(Event.id).order_by(Event.startDate, func.max(Score.predictionDate).desc()).limit(app.config["MAX_ROWS_SHOW"]).all()
+        results = session.query(Event, Venue, Score).join(Venue, Venue.id==Event.venueId).join(Score, Score.event_id==Event.id).filter(Event.startDate >= datetime.today()).filter(Score.predictionDate >= datetime(datetime.today().year,datetime.today().month,datetime.today().day-1,12)).order_by(Event.startDate).limit(app.config["MAX_ROWS_SHOW"]).all()
         logger.debug("Index page accessed")
         return render_template('index.html', results=results)
     except:

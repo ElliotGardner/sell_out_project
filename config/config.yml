@@ -11,7 +11,7 @@ database_info:
   local_database_folder: data
   local_database_type: sqlite
   local_database_name: events_test.db
-  how: local
+  how: rds
 
 populate_database:
   initial_populate_format_categories:
