@@ -8,7 +8,6 @@ from flask_sqlalchemy import SQLAlchemy
 
 from sqlalchemy.orm import sessionmaker  # import the sessionmaker for adding data to the database
 from sqlalchemy.ext.automap import automap_base # import for declaring classes
-from sqlalchemy.sql.expression import func
 
 # Initialize the Flask application
 app = Flask(__name__)

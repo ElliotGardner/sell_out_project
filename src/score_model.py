@@ -382,6 +382,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_location', default=None, help='location of where to save models')
     parser.add_argument('--location_type', default=None, help='whether the models will be saved locally or in s3')
 
+
     args = parser.parse_args()
 
     # run the scoring based on the parsed arguments

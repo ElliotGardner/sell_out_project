@@ -6,6 +6,7 @@ from datetime import datetime  # import datetime for building folder paths
 import json, requests  # import necessary libraries for intake of JSON results from eventbrite
 
 from sqlalchemy import create_engine # import needed sqlalchemy library for db engine creation
+
 from sqlalchemy.ext.automap import automap_base # import for declaring classes
 from sqlalchemy.orm import sessionmaker  # import the sessionmaker for adding data to the database
 import pandas as pd
