@@ -10,6 +10,7 @@ venv: sell_out_env/bin/activate
 create: 
 	cd ~/sell_out_project; . sell_out_env/bin/activate; python src/create_database.py --config config/config.yml
 
+<<<<<<< HEAD
 ingest:
 	cd ~/sell_out_project; . sell_out_env/bin/activate; python src/ingest_datapy --config config/config.yml
 
@@ -18,6 +19,13 @@ populate:
 
 update: 
 	cd ~/sell_out_project; . sell_out_env/bin/activate; python src/update_database.py --config config/config.yml
+=======
+populate: 
+	cd ~/sell_out_project; . sell_out_env/bin/activate; python src/populate_database.py --config config/config.yml
+
+update: 
+	cd ~/sell_out_project; . sell_out_env/bin/activate; python src/update_database.py --config config/config.yml --API_token ***REMOVED***
+>>>>>>> 4554ca42774fcc879c9bda8a8fe2a7a92b648ff7
 
 features: config/last_update.txt
 	cd ~/sell_out_project; . sell_out_env/bin/activate; python src/generate_features.py --config config/config.yml
