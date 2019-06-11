@@ -3,53 +3,16 @@ import sys  # import sys for getting arguments from the command line call
 import argparse  # import for parsing arguments from the command line
 import yaml  # import yaml for loading the config file
 from datetime import datetime  # import datetime for formatting of timestamps
-from sqlalchemy import create_engine, Column, String, Integer, Boolean, DATETIME, DECIMAL, JSON  # import needed sqlalchemy libraries for db
-from sqlalchemy.ext.declarative import declarative_base  # import for declaring classes
 import logging.config  # import logging config
+
+from sqlalchemy import Column, String, Integer, Boolean, DATETIME, DECIMAL  # import needed sqlalchemy libraries for db
+from sqlalchemy.ext.declarative import declarative_base  # import for declaring classes
+
+from src.helpers.helpers import create_db_engine  # helper function for creating a db engine
 
 configPath = os.path.join("config","logging","local.conf")
 logging.config.fileConfig(configPath)
 logger = logging.getLogger("create_database_log")
-
-
-def create_db_engine(database_name, type):
-    """Create an engine for a specific database and database type
-
-    Args:
-    	database_name (str): the name of the database to create
-    	type (str): the type of database to create
-
-    Returns:
-        engine (SQLAlchemy engine): the engine for working with a database
-
-    """
-
-    # generate the engine_string based on the name and database type
-    if type == "sqlite":
-        # set up sqlite connection
-        engine_string = type + ":///" + database_name
-
-    elif type == "mysql+pymysql":
-        # set up mysql connection
-        # the engine_string format
-        # engine_string = "{type}:///{user}:{password}@{host}:{port}/{database}"
-        user = os.environ.get("MYSQL_USER")
-        password = os.environ.get("MYSQL_PASSWORD")
-        host = os.environ.get("MYSQL_HOST")
-        port = os.environ.get("MYSQL_PORT")
-        engine_string = "{}://{}:{}@{}:{}/{}".format(type, user, password, host, port, database_name)
-
-    # if the type of database wasn't set to mysql_pymysql or sqlite, then log an error and exit
-    else:
-        logger.error("Type of database provided wasn't supported: %s", type)
-        sys.exit()
-
-    logger.debug("Engine string is %s", engine_string)
-    # create the engine
-    engine = create_engine(engine_string)
-
-    # return the engine
-    return engine
 
 
 def create_db(engine):

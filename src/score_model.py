@@ -3,34 +3,21 @@ import sys  # import sys for getting arguments from the command line call
 import argparse  # import argparse for getting arguments from the command line
 import yaml  # import yaml for pulling config file
 from datetime import datetime  # import datetime for formatting of timestamps
-import pandas as pd
-from sqlalchemy import Column, String, Integer, Boolean, DATETIME, DECIMAL  # import needed sqlalchemy libraries for db
-from sqlalchemy.ext.declarative import declarative_base  # import for declaring classes
-from sqlalchemy.orm import sessionmaker  # import the sessionmaker for adding data to the database
-from sqlalchemy.ext.automap import automap_base # import for declaring classes
-
-import numpy as np
-from sklearn.preprocessing import *
-from sklearn.linear_model import *
-from sklearn.tree import *
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import Pipeline
-from sklearn.model_selection import KFold, cross_val_score
-
 import pickle
-
 import logging.config  # import logging config
 
-from create_database import create_db_engine  # import a function for creating an engine
-from train_model import pull_features  # import a function for pulling features
+import pandas as pd
+from sqlalchemy.orm import sessionmaker  # import the sessionmaker for adding data to the database
+from sqlalchemy.ext.automap import automap_base # import for declaring classes
+import numpy as np
+
+from src.helpers.helpers import create_db_engine, pull_features  # import helpers for creating an engine and pulling features
+from src.helpers.helpers import create_scores_table, create_score, update_score  # import helpers for creating and updating scores
 
 configPath = os.path.join("config", "logging", "local.conf")
 logging.config.fileConfig(configPath)
 logger = logging.getLogger("score_model_log")
 
-## pull the features data for all events that have not yet occurred
-## use the trained and pickled model from train_model.py to generate predictions
-## save the predictions in a new table
 
 def get_models(location):
     """function for opening loading saved models
@@ -99,146 +86,6 @@ def score_models(classifier, regressor, features):
 
     # return the scores
     return scores
-
-
-def create_scores_table(engine):
-    """function for creating a scores table in a database
-
-    Given a database connection engine, access the database and create a scores table
-
-    Args:
-        engine (SQLAlchemy engine): the engine for working with a database
-
-    Returns:
-        None
-
-    """
-    # check if the scores table already exists, stop execution if it does
-    if 'scores' in engine.table_names():
-        logging.warning('scores table already exists!')
-
-    else:
-        logger.debug("Creating a scores table at %s", engine.url)
-
-        Base = declarative_base()
-
-        logger.debug("Creating the scores table")
-
-        # create a score class
-        class Score(Base):
-            """Create a data model for the scores table """
-            __tablename__ = 'scores'
-            pred_id = Column(String(24), primary_key=True)
-            event_id = Column(String(12), unique=False, nullable=False)
-            startDate = Column(DATETIME(), unique=False, nullable=False)
-            predictionDate = Column(DATETIME(), unique=False, nullable=False)
-            willSellOut = Column(Boolean(), unique=False, nullable=False)
-            confidence = Column(DECIMAL(), unique=False, nullable=False)
-            howFarOut = Column(DECIMAL(), unique=False, nullable=False)
-
-            def __repr__(self):
-                return '<Score %r>' % self.id
-
-        try:
-            # create the tables
-            Base.metadata.create_all(engine)
-
-            # check that the tables were created
-            for table in engine.table_names():
-                logger.info("Created table %s", table)
-        except Exception as e:
-            logger.error("Could not create the database: %s", e)
-
-
-def create_score(engine, score):
-    """make a score to add to the database using an engine
-
-    Args:
-    	engine (SQLAlchemy engine): the engine for working with a database
-    	score (dict): dictionary for a score from the data source
-
-    Returns:
-    	score_to_add (Score): the built score to push to the database
-
-    """
-    logger.debug("Creating score %s to add to the database", score['pred_id'])
-
-    # use the engine to build a reflection of the database
-    Base = automap_base()
-    Base.prepare(engine, reflect=True)
-
-    # build the score class from the scores table in the database
-    Score = Base.classes.scores
-
-    # build the score
-    score_to_add = Score(pred_id=score['pred_id'],
-        event_id=score['id'],
-        startDate=datetime.fromisoformat(score['startDate']) if type(score['startDate']) == str else score['startDate'].to_pydatetime(),
-        predictionDate=datetime.today(),
-        willSellOut=score['willSellOut'],
-        confidence=float(score['confidence']),
-        howFarOut=score['howFarOut'])
-
-    logger.debug("score %s was created", score_to_add.pred_id)
-
-    # return the score
-    return score_to_add
-
-
-def update_score(engine, score):
-    """update a score to the database using an engine
-
-    Args:
-    	engine (SQLAlchemy engine): the engine for working with a database
-    	score (dict): dictionary for an score from the data source
-
-    Returns:
-    	None
-
-    """
-    logger.debug('Update score %s', score['pred_id'])
-
-    # use the engine to build a reflection of the database
-    Base = automap_base()
-    Base.prepare(engine, reflect=True)
-
-    # build the score class from the scores table in the database
-    Score = Base.classes.scores
-
-    # create a session from the engine
-    session_mk = sessionmaker()
-    session_mk.configure(bind=engine)
-    session = session_mk()
-
-    # info changed flag
-    new_info = False
-
-    # query the score row
-    score_row = session.query(Score).filter(Score.pred_id == score['pred_id']).first()
-
-    # update the score details if necessary
-    if score_row.willSellOut != score['willSellOut']:
-        setattr(score_row, 'willSellOut', score['willSellOut'])
-        new_info = True
-        logging.debug('new willSellOut')
-
-    if score_row.confidence != float(score['confidence']):
-        setattr(score_row, 'confidence', float(score['confidence']))
-        new_info = True
-        logging.debug('new confidence')
-
-    if score_row.howFarOut != score['howFarOut']:
-        setattr(score_row, 'howFarOut', score['howFarOut'])
-        new_info = True
-        logging.debug('new howFarOut')
-
-    # commit the data if a change was made
-    if new_info:
-        logger.debug('new score: %s: %s, %s, %s, %s', score_row.pred_id, score_row.startDate, score_row.willSellOut, score_row.confidence, score_row.howFarOut)
-        session.commit()
-
-    # close the session
-    session.close()
 
 
 def save_scores(engine, scores):
@@ -335,7 +182,7 @@ def run_scoring(args):
             type = config["database_info"]["rds_database_type"]
 
         else:  # if no additional arguments were passed and the config file didn't have it, then log the error and exit
-            logger.error('Database type must be pass in arguments or in the config file')
+            logger.error('Database type must be passed in arguments or in the config file')
             sys.exit()
 
         # if a database_name argument was passed, then use it for calling the appropriate database
@@ -347,7 +194,7 @@ def run_scoring(args):
             db_name = config["database_info"]["rds_database_name"]
 
         else:  # if no additional arguments were passed and the config file didn't have it, then log the error and exit
-            logger.error('Database name must be pass in arguments or in the config file')
+            logger.error('Database name must be passed in arguments or in the config file')
             sys.exit()
 
         # create the engine for the database and type
@@ -363,7 +210,7 @@ def run_scoring(args):
             type = config["database_info"]["local_database_type"]
 
         else:  # if no additional arguments were passed and the config file didn't have it, then log the error and exit
-            logger.error('Database type must be pass in arguments or in the config file')
+            logger.error('Database type must be passed in arguments or in the config file')
             sys.exit()
 
         # if a database_name argument was passed, then use it for calling the appropriate database
@@ -376,7 +223,7 @@ def run_scoring(args):
                                    config["database_info"]["local_database_name"])
 
         else:  # if no additional arguments were passed and the config file didn't have it, then log the error and exit
-            logger.error('Database name must be pass in arguments or in the config file')
+            logger.error('Database name must be passed in arguments or in the config file')
             sys.exit()
 
         # create the engine for the database and type
@@ -389,8 +236,20 @@ def run_scoring(args):
     # create the database schema in the engine
     create_scores_table(engine)
 
+    # if a model_location argument was passed, then use it
+    if args.model_type is not None:
+        model_location = args.model_location
+
+    # if no model_location argument was passed, then look for it in the config file
+    elif "model_info" in config and "model_location" in config["model_info"]:
+        model_location = config["model_info"]["model_location"]
+
+    else:  # if no additional arguments were passed and the config file didn't have it, then log the error and exit
+        logger.error('Model location must be passed in arguments or in the config file')
+        sys.exit()
+
     # get the models
-    models_path = os.path.join('models')
+    models_path = os.path.join(model_location)
     classifier, regressor = get_models(models_path)
 
     # get the features
@@ -411,6 +270,7 @@ if __name__ == '__main__':
     parser.add_argument('--type', default=None, help="type of database to create, 'sqlite' or 'mysql+pymysql'")
     parser.add_argument('--database_name', default=None,
                         help="location where database is to be created (including name.db)")
+    parser.add_argument('--model_location', default='models', help='location of where to save models')
 
     args = parser.parse_args()
 

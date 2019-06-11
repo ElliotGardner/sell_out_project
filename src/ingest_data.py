@@ -4,86 +4,15 @@ import argparse  # import argparse to get arguments at the command call
 import os  # import os for writing JSON to a file
 import yaml  # import yaml for loading config file
 from datetime import datetime  # import datetime for building folder paths
-from getpass import getpass  # import getpass for input of the token without showing it
 import logging.config  # import logging config
+
 import boto3  # interact with s3
-import botocore.exceptions # an error category for S3 functionality
+
+from src.helpers.helpers import set_headers, API_request  # helper functions for ingesting data
 
 configPath = os.path.join("config","logging","local.conf")
 logging.config.fileConfig(configPath)
 logger = logging.getLogger("ingest_data_log")
-
-
-def set_headers(oauth_token=None):
-    """get the OAuth token needed for an API connection and set the header for the connection
-
-    Args:
-    	oauth_token (str): Optionally provide the OAuth token
-
-    Returns:
-    	headers (dict): The headers needed for the API request
-
-    """
-    logger.info("Setting API Request Headers")
-    # if the oauth_token wasn't passed, then request the user enter one
-    if oauth_token is None:
-        oauth_token = getpass(prompt='Enter the OAuth Personal Token for API requests:')
-        logger.debug("OAuth token set to %s", oauth_token)
-    else:
-        logger.debug("OAuth token provided in function call as %s", oauth_token)
-
-    # set the token into a requests header
-    headers = {
-        'Authorization': ('Bearer ' + oauth_token),
-    }
-    logger.debug('Headers created')
-
-    # return the headers
-    return headers
-
-
-def API_request(API_url, page_num=1, headers=None):
-    """makes a single API request to a page for a given page number and headers
-
-    Args:
-    	API_url (str): the URL for the API request
-    	page_num(int): the current page being requested
-    	headers (dict): the headers to use for the API call
-
-    Returns:
-    	results (dict): the data from the API call response
-
-    """
-    logger.info('Retrieving Page %s...', page_num)
-
-    # if the page number is one, use the plain API call, otherwise add the specified page to the API url
-    if page_num == 1:
-        full_url = API_url
-    else:
-        full_url = API_url + "&page=" + str(page_num)
-    logger.debug("URL for the call is %s", full_url)
-
-    # make the API call and load the response text as a JSON dictionary
-    response = requests.get(
-        full_url,
-        headers=headers)
-    logger.debug("Received response of %s", response.status_code)
-    # if a bad response (not 200) is received, then stop the load
-    if response.status_code != requests.codes.ok:
-        logger.error("Bad Response!")
-        sys.exit()
-    results = json.loads(response.text)
-    try:
-        logger.debug("Received results containing %s events", len(results['events']))
-    except Exception as e:
-        logger.debug("Received a response, but no events contained: %s", e)
-
-    # append the time of pull to the results
-    date = datetime.now()
-    results['PullTime'] = date.strftime('%y-%m-%d-%H-%M-%S')
-
-    # return the results JSON
-    return results
 
 
 def save_JSON_s3(JSON_data, filename, bucket, folder = "", public=False):
@@ -297,6 +226,7 @@ def run_ingest(args):
 
     logger.info("%s pages received", page-1)
 
+
 if __name__ == '__main__':
     logger.debug('Start of ingest_data script')
 
@@ -310,4 +240,5 @@ if __name__ == '__main__':
     # run the ingest based on the parsed arguments
     run_ingest(args)
 
-    print("Done!")
+    # show the time that the pull was completed
+    print(str(datetime.today()) + " - Ingest Done!")

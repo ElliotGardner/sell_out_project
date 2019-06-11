@@ -1,8 +1,8 @@
 ingest_data:
   API_url: 'https://www.eventbriteapi.com/v3/events/search/?categories=103&location.address=chicago&location.within=50mi&sort_by=date&expand=venue,format,bookmark_info,ticket_availability,music_properties,guestlist_metrics,basic_inventory_info'
-  how: both
+  how: both # s3, local, or both supported
   output_folder: data
-  s3_bucket: emg8426.msia423.project
+  s3_bucket: emg8426.msia423.project #change this in all three locations if necessary
   s3_public: False
 
 database_info:
@@ -11,23 +11,24 @@ database_info:
   local_database_folder: data
   local_database_type: sqlite
   local_database_name: events_test.db
-  how: rds
+  how: rds #local or rds, nothing else currently supported
 
 populate_database:
   initial_populate_format_categories:
-    frmats_URL: 'https://www.eventbriteapi.com/v3/formats/'
-    categories_URL: 'https://www.eventbriteapi.com/v3/subcategories/?'
+    frmats_URL: 'https://www.eventbriteapi.com/v3/formats/' #change this in both locations if necessary
+    categories_URL: 'https://www.eventbriteapi.com/v3/subcategories/?' #change this in both locations if necessary
   initial_populate_events_venues:
-    raw_data_location: 'emg8426.msia423.project'
+    raw_data_location: emg8426.msia423.project #change this in all three locations if necessary
     location_type: s3
 
 update_database:
   update_format_categories:
-    frmats_URL: 'https://www.eventbriteapi.com/v3/formats/'
-    categories_URL: 'https://www.eventbriteapi.com/v3/subcategories/?'
+    frmats_URL: 'https://www.eventbriteapi.com/v3/formats/' #change this in both locations if necessary
+    categories_URL: 'https://www.eventbriteapi.com/v3/subcategories/?' #change this in both locations if necessary
   update_events_venues:
-    raw_data_location: 'emg8426.msia423.project'
+    raw_data_location: emg8426.msia423.project #change this in all three locations if necessary
     location_type: s3
 
-train_model:
-  model_type: linear
+model_info:
+  model_type: linear # linear and tree currently supported
+  model_location: models

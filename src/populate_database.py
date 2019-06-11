@@ -3,161 +3,19 @@ import sys  # import sys for getting arguments from the command line call
 import argparse  # import argparse for getting arguments from the command line
 import yaml  # import yaml for pulling config file
 import json  # import json for reading JSON files from the s3 raw data bucket
-import boto3  # import boto3 for access s3
 from datetime import datetime  # import datetime for formatting of timestamps
-from sqlalchemy.orm import sessionmaker  # import the sessionmaker for adding data to the database
-from sqlalchemy.ext.automap import automap_base # import for declaring classes
 import logging.config  # import logging config
 
-from create_database import create_db_engine  # import a function for creating an engine
-from ingest_data import API_request, set_headers  # import for initially populating events, venues, formats, and categories
+import boto3  # import boto3 for access s3
+from sqlalchemy.orm import sessionmaker  # import the sessionmaker for adding data to the database
+from sqlalchemy.ext.automap import automap_base # import for declaring classes
+
+from src.helpers.helpers import API_request, set_headers, create_db_engine  # import helper functions for API requests, headers setting, and creating a DB engine
+from src.helpers.helpers import create_event, create_venue, create_frmat, create_category  # import helper functions for DB creation
 
 configPath = os.path.join("config","logging","local.conf")
 logging.config.fileConfig(configPath)
 logger = logging.getLogger("populate_database_log")
-
-
-def create_event(engine, event, infoDate):
-    """make an event to add to the database using an engine
-
-    Args:
-    	engine (SQLAlchemy engine): the engine for working with a database
-    	event (dict): dictionary for an event from the data source
-    	infoDate (str): the date the info is from (pull date)
-
-    Returns:
-    	event_to_add (Event): the built event to push to the database
-
-    """
-    logger.debug("Creating event %s to add to the database", event['id'])
-
-    # use the engine to build a reflection of the database
-    Base = automap_base()
-    Base.prepare(engine, reflect=True)
-
-    # build the Event class from the events table in the database
-    Event = Base.classes.events
-
-    # build the event
-    event_to_add = Event(id=event['id'],
-                name=event['name']['text'],
-                startDate=datetime.fromisoformat(event['start']['local']),
-                endDate=datetime.fromisoformat(event['end']['local']),
-                publishedDate=datetime.fromisoformat(event['published'][0:19]),
-                onSaleDate= datetime.fromisoformat(event['ticket_availability']['start_sales_date']['local']) if event['ticket_availability']['start_sales_date'] is not None else datetime.fromisoformat(event['published'][0:19]),
-                venueId=int(event['venue_id']),
-                categoryId= int(event['subcategory_id']) if event['subcategory_id'] is not None else 3999,  # this is the "music other" subcategory
-                formatId=int(event['format_id']) if event['format_id'] is not None else 100,  # this is the "other" format
-                inventoryType=event['inventory_type'],
-                isFree=event['is_free'],
-                isReservedSeating=event['is_reserved_seating'],
-                isAvailable=event['ticket_availability']['has_available_tickets'],
-                isSoldOut=event['ticket_availability']['is_sold_out'],
-                soldOutDate= datetime.strptime(infoDate, '%y-%m-%d-%H-%M-%S') if event['ticket_availability']['is_sold_out'] else datetime(2019,4,12,0,0,1),
-                hasWaitList=event['ticket_availability']['waitlist_available'],
-                minPrice= float(event['ticket_availability']['minimum_ticket_price']['major_value']) if event['ticket_availability']['minimum_ticket_price'] is not None else None,
-                maxPrice= float(event['ticket_availability']['maximum_ticket_price']['major_value']) if event['ticket_availability']['maximum_ticket_price'] is not None else None,
-                capacity= int(event['capacity']) if event['capacity'] is not None else 10000,
-                ageRestriction=event['music_properties']['age_restriction'],
-                doorTime=event['music_properties']['door_time'],
-                presentedBy=event['music_properties']['presented_by'],
-                isOnline=event['online_event'],
-                url=event['url'],
-                lastInfoDate=datetime.strptime(infoDate, '%y-%m-%d-%H-%M-%S'))
-    logger.debug("Event %s was created", event_to_add.id)
-
-    # return the event
-    return event_to_add
-
-
-def create_venue(engine, event):
-    """make a venue to add to the database using an engine
-
-    Args:
-    	engine (SQLAlchemy engine): the engine for working with a database
-    	event (dict): dictionary for a event (with venue info) from the data source
-
-    Returns:
-    	venue_to_add (Venue): the built venue to push to the database
-
-    """
-    logger.debug("Creating venue %s to add to the database", event['venue_id'])
-
-    # use the engine to build a reflection of the database
-    Base = automap_base()
-    Base.prepare(engine, reflect=True)
-
-    # build the Venue class from the venues table in the database
-    Venue = Base.classes.venues
-
-    # build the venue
-    venue_to_add = Venue(id=int(event['venue_id']),
-                name=event['venue']['name'],
-                city=event['venue']['address']['city'],
-                ageRestriction=event['venue']['age_restriction'],
-                capacity=int(event['venue']['capacity']) if event['venue']['capacity'] is not None else 10000)
-    logger.debug("Venue %s was created", venue_to_add.id)
-
-    # return the venue
-    return venue_to_add
-
-
-def create_frmat(engine, frmat):
-    """make a format to add to the database using an engine
-
-    Args:
-    	engine (SQLAlchemy engine): the engine for working with a database
-    	frmat (dict): dictionary for a format from the data source
-
-    Returns:
-    	frmat_to_add (Format): the built format to push to the database
-
-    """
-    logger.debug("Creating format %s to add to the database", frmat['id'])
-
-    # use the engine to build a reflection of the database
-    Base = automap_base()
-    Base.prepare(engine, reflect=True)
-
-    # build the Format class from the formats table in the database
-    Frmat = Base.classes.frmats
-
-    # build the format
-    frmat_to_add = Frmat(id=int(frmat['id']),
-                name=frmat['name'])
-    logger.debug("Format %s was created", frmat_to_add.id)
-
-    # return the format
-    return frmat_to_add
-
-
-def create_category(engine, category):
-    """make a category to add to the database using an engine
-
-    Args:
-    	engine (SQLAlchemy engine): the engine for working with a database
-    	category (dict): dictionary for a category from the data source
-
-    Returns:
-    	category_to_add (Category): the built category to push to the database
-
-    """
-    logger.debug("Creating category %s to add to the database", category['id'])
-
-    # use the engine to build a reflection of the database
-    Base = automap_base()
-    Base.prepare(engine, reflect=True)
-
-    # build the Category class from the categories table in the database
-    Category = Base.classes.categories
-
-    # build the category
-    category_to_add = Category(id=int(category['id']),
-                name=category['name'])
-    logger.debug("Category %s was created", category_to_add.id)
-
-    # return the category
-    return category_to_add
 
 
 def initial_populate_format_categories(engine, frmats_URL, categories_URL, headers=None):
@@ -377,6 +235,7 @@ def initial_populate_events_venues(engine, raw_data_location, location_type):
     logger.info("%s objects added", num_added)
     session.close()
 
+
 def run_populate(args):
     """runs the population script"""
     try:  # opens the specified config file
@@ -495,6 +354,7 @@ def run_populate(args):
     else:
         logger.error('Method of database storage (should be "rds" or "local") in config file not supported')
         sys.exit()
+
 
 if __name__ == '__main__':
     logger.debug('Start of populate_database Script')

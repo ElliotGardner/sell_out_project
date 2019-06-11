@@ -1,16 +1,13 @@
 import traceback
-from flask import render_template, request, redirect, url_for
+from flask import render_template
 import logging.config
 from datetime import datetime
-
-import os
 
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 
 from sqlalchemy.orm import sessionmaker  # import the sessionmaker for adding data to the database
 from sqlalchemy.ext.automap import automap_base # import for declaring classes
-from sqlalchemy.sql.expression import func
 
 # Initialize the Flask application
 app = Flask(__name__)
@@ -57,13 +54,14 @@ def index():
     Returns: rendered html template
 
     """
-
+    # try querying the database for the relevant event, venue, and score information
     try:
-        #results = session.query(Event, Venue, Score).join(Venue, Venue.id==Event.venueId).join(Score, Score.event_id==Event.id).filter(Event.startDate >= datetime.today()).group_by(Event.id).order_by(Event.startDate, func.max(Score.predictionDate).desc()).limit(app.config["MAX_ROWS_SHOW"]).all()
         results = session.query(Event, Venue, Score).join(Venue, Venue.id==Event.venueId).join(Score, Score.event_id==Event.id).filter(Event.startDate >= datetime.today()).filter(Score.predictionDate >= datetime(datetime.today().year,datetime.today().month,datetime.today().day-1,12)).order_by(Event.startDate).limit(app.config["MAX_ROWS_SHOW"]).all()
         logger.debug("Index page accessed")
+        # render the query results into the page
         return render_template('index.html', results=results)
     except:
+        # if there is an issue, then display the error page
         traceback.print_exc()
         logger.warning("Not able to display events, error page returned")
         return render_template('error.html')
