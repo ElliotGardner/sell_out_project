@@ -3,8 +3,10 @@ import sys  # import sys for getting arguments from the command line call
 import argparse  # import argparse for getting arguments from the command line
 import yaml  # import yaml for pulling config file
 from datetime import datetime  # import datetime for formatting of timestamps
-import pandas as pd
+import pickle
+import logging.config  # import logging config
 
+import pandas as pd
 import numpy as np
 from sklearn.preprocessing import *
 from sklearn.linear_model import *
@@ -13,37 +15,11 @@ from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import KFold, cross_val_score
 
-import pickle
-
-import logging.config  # import logging config
-
-from create_database import create_db_engine  # import a function for creating an engine
+from src.helpers.helpers import create_db_engine, pull_features  # import helpers for creating an engine and pulling the features table
  
 configPath = os.path.join("config", "logging", "local.conf")
 logging.config.fileConfig(configPath)
 logger = logging.getLogger("train_model_log")
-
-def pull_features(engine):
-    """function for pulling features from a populated and updated database for training a model
-
-    Given a database connection engine, access the database and pull the requested
-    data as a Pandas dataframe.
-
-    Args:
-        engine (SQLAlchemy engine): the engine for working with a database
-
-    Returns:
-        features (pandas DataFrame): a dataframe containing the features columns for each event
-
-    """
-    logger.debug('Start of pull features function')
-
-    features = pd.read_sql('SELECT * FROM features', engine)
-    features['startDate'] = features['startDate'].apply(lambda x: datetime.fromisoformat(x) if type(x) == str else x.to_pydatetime())
-
-    logger.debug('%s', features.head())
-
-    return features
 
 
 def train_models(model_type, features):
@@ -229,13 +205,13 @@ def run_train_model(args):
     # pull the features
     features = pull_features(engine)
 
-    # if a model_type argument was passed, then use it for calling the appropriate database type
+    # if a model_type argument was passed, then use it
     if args.model_type is not None:
         model_type = args.model_type
 
     # if no model_type argument was passed, then look for it in the config file
-    elif "train_model" in config and "model_type" in config["train_model"]:
-        model_type = config["train_model"]["model_type"]
+    elif "model_info" in config and "model_type" in config["model_info"]:
+        model_type = config["model_info"]["model_type"]
 
     else:  # if no additional arguments were passed and the config file didn't have it, then log the error and exit
         logger.error('Model type must be pass in arguments or in the config file')
@@ -244,8 +220,20 @@ def run_train_model(args):
     # train the models
     classifier, regressor = train_models(model_type, features)
 
-    # save in models
-    models_path = os.path.join('models')
+    # if a model_location argument was passed, then use it
+    if args.model_type is not None:
+        model_location = args.model_location
+
+    # if no model_location argument was passed, then look for it in the config file
+    elif "model_info" in config and "model_location" in config["model_info"]:
+        model_location = config["model_info"]["model_location"]
+
+    else:  # if no additional arguments were passed and the config file didn't have it, then log the error and exit
+        logger.error('Model location must be passed in arguments or in the config file')
+        sys.exit()
+
+    # save in identified location
+    models_path = os.path.join(model_location)
 
     save_models(classifier, regressor, models_path)
 
@@ -253,13 +241,14 @@ def run_train_model(args):
 if __name__ == '__main__':
     logger.debug('Start of train_model script')
 
-    # if this code is run as a script, then parse arguments for the location of the config and, optionally, the type and location of the db
+    # if this code is run as a script, then parse arguments for the location of the config and, optionally, the type and location of the db and models
     parser = argparse.ArgumentParser(description="create database")
     parser.add_argument('--config', help='path to yaml file with configurations')
     parser.add_argument('--type', default=None, help="type of database to create, 'sqlite' or 'mysql+pymysql'")
     parser.add_argument('--database_name', default=None,
                         help="location where database is to be created (including name.db)")
     parser.add_argument('--model_type', default='linear', help='type of models to train, should be "linear" or "tree"')
+    parser.add_argument('--model_location', default='models', help='location of where to save models')
 
     args = parser.parse_args()
 
