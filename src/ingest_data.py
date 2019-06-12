@@ -1,5 +1,7 @@
 import json, requests  # import necessary libraries for intake of JSON results from eventbrite
+import os
 import sys  # import sys for getting arguments from the command line call
+sys.path.append(os.environ.get('PYTHONPATH'))
 import argparse  # import argparse to get arguments at the command call
 import os  # import os for writing JSON to a file
 import yaml  # import yaml for loading config file

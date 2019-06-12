@@ -1,5 +1,6 @@
 import os
 import sys  # import sys for getting arguments from the command line call
+sys.path.append(os.environ.get('PYTHONPATH'))
 import argparse  # import argparse for getting arguments from the command line
 import yaml  # import yaml for pulling config file
 from datetime import datetime  # import datetime for formatting of timestamps
@@ -14,6 +15,7 @@ from sklearn.tree import *
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import KFold, cross_val_score
+import boto3
 
 from src.helpers.helpers import create_db_engine, pull_features  # import helpers for creating an engine and pulling the features table
  
@@ -105,7 +107,7 @@ def train_models(model_type, features):
     return classifier, regressor
 
 
-def save_models(classifier, regressor, location):
+def save_models_local(classifier, regressor, location):
     """function for saving fit models for later use
 
     Args:
@@ -130,6 +132,43 @@ def save_models(classifier, regressor, location):
     with open(regress_file, "wb") as f:
         pickle.dump(regressor, f)
         logger.info("Trained regressor model object saved to %s", f.name)
+
+
+def save_models_s3(classifier, regressor, location):
+    """function for saving fit models for later use
+
+    Args:
+        classifier (Model object): a trained classification model
+        regressor (Model object): a trained regression model
+        location (path): the path object for where to save the model (should be a directory)
+
+    Returns:
+        None
+
+    """
+    logging.info("Uploading models to %s", location)
+
+    # create an s3 resource
+    s3 = boto3.resource('s3')
+
+    try:  # try creating the object
+        # build the model object names
+        fullname_class = 'models/classifier.pkl'
+        fullname_regress = 'models/regressor.pkl'
+
+        # create the s3 objects
+        obj_class = s3.Object(location, fullname_class)
+        obj_regress = s3.Object(location, fullname_regress)
+
+        # put the model_data into the body of the objects
+        response1 = obj_class.put(Body=pickle.dumps(classifier))
+        logger.info("Classifier uploaded as %s", response1["ETag"])
+
+        response2 = obj_regress.put(Body=pickle.dumps(regressor))
+        logger.info("Regressor uploaded as %s", response2["ETag"])
+
+    except Exception as e:
+        logger.error(e)
 
 
 def run_train_model(args):
@@ -220,22 +259,61 @@ def run_train_model(args):
     # train the models
     classifier, regressor = train_models(model_type, features)
 
-    # if a model_location argument was passed, then use it
-    if args.model_type is not None:
-        model_location = args.model_location
+    # check for the specified save location type as an argument or in the config file
+    if args.location_type is not None:
+        save_type = args.location_type
 
-    # if no model_location argument was passed, then look for it in the config file
-    elif "model_info" in config and "model_location" in config["model_info"]:
-        model_location = config["model_info"]["model_location"]
+    elif "model_info" in config and "location_type" in config["model_info"]:
+        save_type = config["model_info"]["location_type"]
 
-    else:  # if no additional arguments were passed and the config file didn't have it, then log the error and exit
-        logger.error('Model location must be passed in arguments or in the config file')
+    else:
+        logger.error('location type must be pass in arguments or in the config file')
         sys.exit()
 
-    # save in identified location
-    models_path = os.path.join(model_location)
+    # if the location type is 'local', then save the models locally
+    if save_type == 'local':
 
-    save_models(classifier, regressor, models_path)
+        # if a model_location argument was passed, then use it
+        if args.model_location is not None:
+            model_location = args.model_location
+
+        # if no model_location argument was passed, then look for it in the config file
+        elif "model_info" in config and "model_location" in config["model_info"]:
+            model_location = config["model_info"]["model_location"]
+
+        else:  # if no additional arguments were passed and the config file didn't have it, then log the error and exit
+            logger.error('Model location must be passed in arguments or in the config file')
+            sys.exit()
+
+        # save in identified location
+        models_path = os.path.join(model_location)
+
+        save_models_local(classifier, regressor, models_path)
+
+    # if the location type is 's3', then save the models in s3
+    elif save_type == 's3':
+
+        # if a model_location argument was passed, then use it
+        if args.model_location is not None:
+            model_location = args.model_location
+
+        # if no model_location argument was passed, then look for it in the config file
+        elif "model_info" in config and "model_location" in config["model_info"]:
+            model_location = config["model_info"]["model_location"]
+
+        else:  # if no additional arguments were passed and the config file didn't have it, then log the error and exit
+            logger.error('Model location must be passed in arguments or in the config file')
+            sys.exit()
+
+        # save in identified location
+        models_path = os.path.join(model_location)
+
+        save_models_s3(classifier, regressor, models_path)
+
+    # otherwise, log the error and exit
+    else:
+        logger.error('location type must be "s3" or "local"')
+        sys.exit()
 
 
 if __name__ == '__main__':
@@ -248,7 +326,8 @@ if __name__ == '__main__':
     parser.add_argument('--database_name', default=None,
                         help="location where database is to be created (including name.db)")
     parser.add_argument('--model_type', default='linear', help='type of models to train, should be "linear" or "tree"')
-    parser.add_argument('--model_location', default='models', help='location of where to save models')
+    parser.add_argument('--model_location', default=None, help='location of where to save models')
+    parser.add_argument('--location_type', default=None, help='whether the models will be saved locally or in s3')
 
     args = parser.parse_args()
 

@@ -1,8 +1,10 @@
 import os
 import sys  # import sys for getting arguments from the command line call
+sys.path.append(os.environ.get('PYTHONPATH'))
 import argparse  # import argparse for getting arguments from the command line
 import yaml  # import yaml for pulling config file
 import json  # import json for reading JSON files from the s3 raw data bucket
+import re
 import logging.config  # import logging config
 
 from datetime import datetime  # import datetime for formatting of timestamps
@@ -189,8 +191,11 @@ def update_events_venues(engine, raw_data_location, location_type):
 
     # pull the last update date
     update_path = os.path.join('config','last_update.txt')
-    with open(update_path, mode='r') as f:
-        last_update_date = f.readline()
+    try:
+        with open(update_path, mode='r') as f:
+            last_update_date = f.readline()
+    except Exception as e:
+        last_update_date = '90-01-01-01-01-01'
 
     # initialize a tracker for the latest date of data
     new_update_date = datetime.strptime(last_update_date, '%y-%m-%d-%H-%M-%S')
@@ -236,7 +241,7 @@ def update_events_venues(engine, raw_data_location, location_type):
                 body = response['Body'].read()
 
                 # filter out empty response
-                if str(body) != "b''":
+                if str(body) != "b''" and object.key[-5:] == '.json':
                     # load the output of the body as a dictionary
                     output = json.loads(body)
 
@@ -254,10 +259,10 @@ def update_events_venues(engine, raw_data_location, location_type):
                     # pull the current events dataframe
                     current_events = pd.read_sql('SELECT * FROM events', engine)
                     current_events = current_events.drop(columns=['lastInfoDate', 'soldOutDate'])
-                    current_events['startDate'] = current_events['startDate'].apply(lambda x: x.to_pydatetime())
-                    current_events['endDate'] = current_events['endDate'].apply(lambda x: x.to_pydatetime())
-                    current_events['publishedDate'] = current_events['publishedDate'].apply(lambda x: x.to_pydatetime())
-                    current_events['onSaleDate'] = current_events['onSaleDate'].apply(lambda x: x.to_pydatetime())
+                    current_events['startDate'] = current_events['startDate'].apply(lambda x: datetime.fromisoformat(x) if type(x) == str else x.to_pydatetime())
+                    current_events['endDate'] = current_events['endDate'].apply(lambda x: datetime.fromisoformat(x) if type(x) == str else x.to_pydatetime())
+                    current_events['publishedDate'] = current_events['publishedDate'].apply(lambda x: datetime.fromisoformat(x) if type(x) == str else x.to_pydatetime())
+                    current_events['onSaleDate'] = current_events['onSaleDate'].apply(lambda x: datetime.fromisoformat(x) if type(x) == str else x.to_pydatetime())
 
                     venue_ids = session.query(Venue.id).all()
                     venue_ids = {entity[0]: "" for entity in venue_ids}
@@ -310,6 +315,140 @@ def update_events_venues(engine, raw_data_location, location_type):
                     for object in objects_to_add:
                         session.add(object)
                         logger.debug("Object %s added", object)
+                        num_added += 1
+
+                    session.commit()
+                    logger.info("%s objects added", num_added)
+                    overall_objects_added += num_added
+
+                    # update the last_update_date
+                    update_path = os.path.join('config', 'last_update.txt')
+                    new_update_date_txt = datetime.strftime(new_update_date, '%y-%m-%d-%H-%M-%S')
+                    logging.info('New latest update is %s', new_update_date_txt)
+                    with open(update_path, mode='w') as f:
+                        f.write(new_update_date_txt)
+
+    if location_type == 'local':
+        # load the files
+        folder = raw_data_location
+
+        all_objects = []
+
+        for parent, directory, files in os.walk(os.path.join(os.getcwd(), folder)):
+            all_objects = all_objects + [os.path.join(parent, file) for file in files if file[-5:] == '.json']
+
+            # build a sorting key function for parsing the date from a filename
+
+        def parseDate(object):
+            try:
+                # get the info after the "raw" folder part of the path
+                date_name = re.split(r'raw', object)[1][1:-5]
+                full_date, time = os.path.split(date_name)
+                year_month, day = os.path.split(full_date)
+                year, month = os.path.split(year_month)
+                time_split = re.split('_', time)
+                hour = time_split[0]
+                minute = time_split[1]
+                second = time_split[2]
+                date = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second))
+
+            except Exception as e:
+                date = datetime.today()
+
+            return date
+
+        # sort the object list so that it is in order of pull date
+        all_objects.sort(key=parseDate)
+
+        # for each object in the bucket, check against the last update date, then query it, load the body if new
+        for object in all_objects:
+            object_date = parseDate(object)
+            logging.debug('Parsing JSON %s', object)
+
+            # if the object date is older than the current_update_date, then don't read it
+            if object_date < current_update_date:
+                logging.debug('Old Data')
+            else:
+                # if the parsed date is greater than the new_update_date, then replace it
+                if object_date > new_update_date:
+                    new_update_date = object_date
+
+                with open(object, 'r') as f:
+                    body = f.read()
+
+                    # load the output of the body as a dictionary
+                    output = json.loads(body)
+
+                    # initialize a list of objects to add to the database
+                    objects_to_add = []
+
+                    # initialize a list of venue ids added to prevent attempting to add the same venue multiple times
+                    new_venue_ids = []
+
+                    # query the events and venues tables for all ids, creating a dictionary of keys (for fast lookup)
+                    event_ids = session.query(Event.id).all()
+                    event_ids = {entity[0]: "" for entity in event_ids}
+                    logger.debug('%s event ids retrieved', len(event_ids))
+
+                    # pull the current events dataframe
+                    current_events = pd.read_sql('SELECT * FROM events', engine)
+                    current_events = current_events.drop(columns=['lastInfoDate', 'soldOutDate'])
+                    current_events['startDate'] = current_events['startDate'].apply(lambda x: datetime.fromisoformat(x) if type(x) == str else x.to_pydatetime())
+                    current_events['endDate'] = current_events['endDate'].apply(lambda x: datetime.fromisoformat(x) if type(x) == str else x.to_pydatetime())
+                    current_events['publishedDate'] = current_events['publishedDate'].apply(lambda x: datetime.fromisoformat(x) if type(x) == str else x.to_pydatetime())
+                    current_events['onSaleDate'] = current_events['onSaleDate'].apply(lambda x: datetime.fromisoformat(x) if type(x) == str else x.to_pydatetime())
+
+                    venue_ids = session.query(Venue.id).all()
+                    venue_ids = {entity[0]: "" for entity in venue_ids}
+                    logger.debug('%s venue ids retrieved', len(venue_ids))
+
+                    # pull the current venues dataframe
+                    current_venues = pd.read_sql('SELECT * FROM venues', engine)
+
+                    # for each event in the events list of the output, check the event and venue
+                    for event in output['events']:
+                        # if the event id is in the current list, update it
+                        if event['id'] in event_ids.keys():
+                            event_dict = event_to_event_dict(event)
+
+                            # compare the event row to the corresponding row in the current events dataframe from the database
+                            if list(current_events[current_events['id'] == event['id']].to_dict(
+                                    'index').values())[0] != event_dict:
+                                # if the entries are different, then update the feature
+                                update_event(engine, event, output['PullTime'])
+                                num_events_updated += 1
+                            else:
+                                logger.debug('Event %s is the same', event['id'])
+                        # otherwise, create the event and add it to the list of objects to add
+                        else:
+                            objects_to_add.append(create_event(engine, event, output['PullTime']))
+                            num_events_added += 1
+
+                        # if the venue_id is in the current list, update it
+                        if int(event['venue_id']) in venue_ids.keys():
+                            venue_dict = event_to_venue_dict(event)
+
+                            # compare the venue row to the corresponding row in the current venues dataframe from the database
+                            if list(current_venues[current_venues['id'] == int(event['venue_id'])].to_dict('index').values())[0] != venue_dict:
+                                # if the entries are different, then update the feature
+                                update_venue(engine, event)
+                                num_venues_updated += 1
+                            else:
+                                logger.debug('Venue %s is the same', event['venue_id'])
+                        # otherwise, create the venue and add it to the list of objects to add
+                        elif int(event['venue_id']) not in new_venue_ids:
+                            objects_to_add.append(create_venue(engine, event))
+                            num_venues_added += 1
+                            new_venue_ids.append(int(event['venue_id']))
+                        # otherwise log that the event is already set to be added
+                        else:
+                            logging.debug('Venue %s already set to be added', event['venue_id'])
+
+                    # for each object to add, add it using the session
+                    num_added = 0
+                    for obj in objects_to_add:
+                        session.add(obj)
+                        logger.debug("Object %s added", obj)
                         num_added += 1
 
                     session.commit()

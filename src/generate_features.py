@@ -9,8 +9,10 @@ import pandas as pd
 import re
 from sqlalchemy.orm import sessionmaker  # import the sessionmaker for adding data to the database
 from sqlalchemy.ext.automap import automap_base # import for declaring classes
+from sqlalchemy.ext.declarative import declarative_base  # import for declaring classes
+from sqlalchemy import Column, String, Integer, Boolean, DATETIME, DECIMAL  # import needed sqlalchemy libraries for db
 
-from src.helpers.helpers import create_db_engine, create_features_table, create_feature, update_feature  # import helpers for creating an engine, creating and updating features
+from src.helpers.helpers import create_db_engine, create_feature, update_feature  # import helpers for creating an engine, creating and updating features
 
 configPath = os.path.join("config", "logging", "local.conf")
 logging.config.fileConfig(configPath)
@@ -97,6 +99,67 @@ def convert_data_to_features(engine):
     logger.debug('%s', features.head())
 
     return features
+
+
+def create_features_table(engine):
+    """function for creating a features table in a database
+
+    Given a database connection engine, access the database and create a features table
+
+    Args:
+        engine (SQLAlchemy engine): the engine for working with a database
+
+    Returns:
+        None
+
+    """
+    # check if the features table already exists, stop execution if it does
+    if 'features' in engine.table_names():
+        logging.warning('features table already exists!')
+
+    else:
+        logger.debug("Creating a features table at %s", engine.url)
+
+        Base = declarative_base()
+
+        logger.debug("Creating the features table")
+
+        # create a feature class
+        class Feature(Base):
+            """Create a data model for the events table """
+            __tablename__ = 'features'
+            id = Column(String(12), primary_key=True)
+            startDate = Column(DATETIME(), unique=False, nullable=False)
+            categoryId = Column(Integer(), unique=False, nullable=False)
+            formatId = Column(Integer(), unique=False, nullable=False)
+            inventoryType = Column(String(30), unique=False, nullable=False)
+            isFree = Column(Boolean(), unique=False, nullable=False)
+            isReservedSeating = Column(Boolean(), unique=False, nullable=False)
+            minPrice = Column(DECIMAL(), unique=False, nullable=False)
+            maxPrice = Column(DECIMAL(), unique=False, nullable=False)
+            venueName_simple = Column(String(255), unique=False, nullable=False)
+            onSaleWindow = Column(Integer(), unique=False, nullable=False)
+            eventWeekday = Column(Integer(), unique=False, nullable=False)
+            startHour = Column(Integer(), unique=False, nullable=False)
+            capacity = Column(Integer(), unique=False, nullable=False)
+            locale = Column(String(10), unique=False, nullable=False)
+            ageRestriction = Column(String(30), unique=False, nullable=False)
+            presentedBy_simple = Column(String(30), unique=False, nullable=False)
+            isSoldOut = Column(Boolean(), unique=False, nullable=False)
+            soldOutLead = Column(Integer(), unique=False, nullable=False)
+
+            def __repr__(self):
+                return '<Feature %r>' % self.id
+
+        try:
+            # create the tables
+            Base.metadata.create_all(engine)
+
+            # check that the tables were created
+            for table in engine.table_names():
+                logger.info("Created table %s", table)
+        except Exception as e:
+            logger.error("Could not create the database: %s", e)
 
 
 def save_features(engine, features):

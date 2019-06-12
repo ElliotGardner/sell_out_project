@@ -1,5 +1,6 @@
 import os  # import os for getting environment variables
 import sys  # import sys for getting arguments from the command line call
+sys.path.append(os.environ.get('PYTHONPATH'))
 import argparse  # import for parsing arguments from the command line
 import yaml  # import yaml for loading the config file
 from datetime import datetime  # import datetime for formatting of timestamps

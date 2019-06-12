@@ -1,4 +1,4 @@
-.PHONY: venv create populate update features train score evaluate daily initial all
+.PHONY: venv create populate update features train score evaluate test daily initial all
 
 sell_out_env/bin/activate: requirements.txt
 	cd ~/sell_out_project; test -d sell_out_env || virtualenv sell_out_env
@@ -29,6 +29,9 @@ score: models/classifier.pkl models/regressor.pkl
 	cd ~/sell_out_project; . sell_out_env/bin/activate; python src/score_model.py --config config/config.yml
 
 evaluate:
+
+test:
+	py.test
 
 daily: update features training score evaluate
 

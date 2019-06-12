@@ -1,9 +1,11 @@
 import os
 import sys  # import sys for getting arguments from the command line call
+sys.path.append(os.environ.get('PYTHONPATH'))
 import argparse  # import argparse for getting arguments from the command line
 import yaml  # import yaml for pulling config file
 import json  # import json for reading JSON files from the s3 raw data bucket
 from datetime import datetime  # import datetime for formatting of timestamps
+import re
 import logging.config  # import logging config
 
 import boto3  # import boto3 for access s3
@@ -174,6 +176,7 @@ def initial_populate_events_venues(engine, raw_data_location, location_type):
     # if the formats table has no results, then make an API call to get them
     if num_events == 0:
         logger.info('Retrieving events...')
+
         # get the events results from the location
         if location_type == 's3':
             # load the bucket
@@ -202,7 +205,7 @@ def initial_populate_events_venues(engine, raw_data_location, location_type):
                 body = response['Body'].read()
 
                 # filter out empty response
-                if str(body) != "b''":
+                if str(body) != "b''" and object.key[-5:] == '.json':
                     # load the output of the body as a dictionary
                     output = json.loads(body)
 
@@ -220,6 +223,61 @@ def initial_populate_events_venues(engine, raw_data_location, location_type):
                             venue_ids.append(event['venue_id'])
                             num_venues += 1
 
+
+        # get the events results from the location
+        if location_type == 'local':
+            # load the files
+            folder = raw_data_location
+
+            all_objects = []
+
+            for parent, directory, files in os.walk(os.path.join(os.getcwd(), folder)):
+                all_objects = all_objects + [os.path.join(parent,file) for file in files if file[-5:] == '.json']
+
+                #build a sorting key function for parsing the date from a filename
+            def parseDate(object):
+                try:
+                    #get the info after the "raw" folder part of the path
+                    date_name = re.split(r'raw', object)[1][1:-5]
+                    full_date, time = os.path.split(date_name)
+                    year_month, day = os.path.split(full_date)
+                    year, month = os.path.split(year_month)
+                    time_split = re.split('_', time)
+                    hour = time_split[0]
+                    minute = time_split[1]
+                    second = time_split[2]
+                    date = datetime(int(year), int(month), int(day), int(hour), int(minute), int(second))
+
+                except Exception as e:
+                    date = datetime.today()
+
+                return date
+
+            # sort the object list so that it is in order of pull date
+            all_objects.sort(key=parseDate)
+
+            # for each object in the bucket, query it, load the body
+            for object in all_objects:
+                logging.debug('Parsing JSON %s', object)
+                with open(object, 'r') as f:
+                    body = f.read()
+
+                    # load the output of the body as a dictionary
+                    output = json.loads(body)
+
+                    # for each event in the events list of the output, create an event and venue and add to the list of objects to add
+                    for event in output['events']:
+                        # if the event id isn't in the current list, add it
+                        if event['id'] not in event_ids:
+                            objects_to_add.append(create_event(engine, event, output['PullTime']))
+                            event_ids.append(event['id'])
+                            num_events += 1
+
+                        # if the venue_id isn't in the current list, add it
+                        if event['venue_id'] not in venue_ids:
+                            objects_to_add.append(create_venue(engine, event))
+                            venue_ids.append(event['venue_id'])
+                            num_venues += 1
 
         logger.info("%s events pulled", num_events)
         logger.info("%s venues pulled", num_venues)

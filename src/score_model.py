@@ -1,5 +1,6 @@
 import os
 import sys  # import sys for getting arguments from the command line call
+sys.path.append(os.environ.get('PYTHONPATH'))
 import argparse  # import argparse for getting arguments from the command line
 import yaml  # import yaml for pulling config file
 from datetime import datetime  # import datetime for formatting of timestamps
@@ -9,21 +10,24 @@ import logging.config  # import logging config
 import pandas as pd
 from sqlalchemy.orm import sessionmaker  # import the sessionmaker for adding data to the database
 from sqlalchemy.ext.automap import automap_base # import for declaring classes
+from sqlalchemy import Column, String, Integer, Boolean, DATETIME, DECIMAL  # import needed sqlalchemy libraries for db
+from sqlalchemy.ext.declarative import declarative_base  # import for declaring classes
 import numpy as np
+import boto3
 
 from src.helpers.helpers import create_db_engine, pull_features  # import helpers for creating an engine and pulling features
-from src.helpers.helpers import create_scores_table, create_score, update_score  # import helpers for creating and updating scores
+from src.helpers.helpers import create_score, update_score  # import helpers for creating and updating scores
 
 configPath = os.path.join("config", "logging", "local.conf")
 logging.config.fileConfig(configPath)
 logger = logging.getLogger("score_model_log")
 
 
-def get_models(location):
-    """function for opening loading saved models
+def get_models_local(location):
+    """function for opening loading saved models from a local folder
 
     Args:
-        location (path): the path object for where to save the model (should be a directory)
+        location (path): the path object for where the models were saved (should be a directory)
 
     Returns:
         classifier (Model object): a trained classification model
@@ -45,6 +49,92 @@ def get_models(location):
         logger.info("Trained regressor model object loaded from %s", f.name)
 
     return classifier, regressor
+
+
+def get_models_s3(location):
+    """function for opening loading saved models from s3
+
+    Args:
+        location (path): the bucket for where the models were saved
+
+    Returns:
+        classifier (Model object): a trained classification model
+        regressor (Model object): a trained regression model
+
+    """
+    logger.debug('Start of get models function')
+
+    # load the bucket
+    s3 = boto3.resource("s3")
+
+    # build the model object names
+    fullname_class = 'models/classifier.pkl'
+    fullname_regress = 'models/regressor.pkl'
+
+    # create the s3 objects
+    obj_class = s3.Object(location, fullname_class)
+    obj_regress = s3.Object(location, fullname_regress)
+
+    response1 = obj_class.get()
+    body1 = response1['Body'].read()
+    classifier = pickle.loads(body1)
+    logger.info("Trained classifier model object loaded from %s", obj_class.key)
+
+    response2 = obj_regress.get()
+    body2 = response2['Body'].read()
+    regressor = pickle.loads(body2)
+    logger.info("Trained regressor model object loaded from %s", obj_regress.key)
+
+    return classifier, regressor
+
+
+def create_scores_table(engine):
+    """function for creating a scores table in a database
+
+    Given a database connection engine, access the database and create a scores table
+
+    Args:
+        engine (SQLAlchemy engine): the engine for working with a database
+
+    Returns:
+        None
+
+    """
+    # check if the scores table already exists, stop execution if it does
+    if 'scores' in engine.table_names():
+        logging.warning('scores table already exists!')
+
+    else:
+        logger.debug("Creating a scores table at %s", engine.url)
+
+        Base = declarative_base()
+
+        logger.debug("Creating the scores table")
+
+        # create a score class
+        class Score(Base):
+            """Create a data model for the scores table """
+            __tablename__ = 'scores'
+            pred_id = Column(String(24), primary_key=True)
+            event_id = Column(String(12), unique=False, nullable=False)
+            startDate = Column(DATETIME(), unique=False, nullable=False)
+            predictionDate = Column(DATETIME(), unique=False, nullable=False)
+            willSellOut = Column(Boolean(), unique=False, nullable=False)
+            confidence = Column(DECIMAL(), unique=False, nullable=False)
+            howFarOut = Column(DECIMAL(), unique=False, nullable=False)
+
+            def __repr__(self):
+                return '<Score %r>' % self.id
+
+        try:
+            # create the tables
+            Base.metadata.create_all(engine)
+
+            # check that the tables were created
+            for table in engine.table_names():
+                logger.info("Created table %s", table)
+        except Exception as e:
+            logger.error("Could not create the database: %s", e)
 
 
 def score_models(classifier, regressor, features):
@@ -237,7 +327,7 @@ def run_scoring(args):
     create_scores_table(engine)
 
     # if a model_location argument was passed, then use it
-    if args.model_type is not None:
+    if args.model_location is not None:
         model_location = args.model_location
 
     # if no model_location argument was passed, then look for it in the config file
@@ -248,9 +338,28 @@ def run_scoring(args):
         logger.error('Model location must be passed in arguments or in the config file')
         sys.exit()
 
+    # check for the specified save location type as an argument or in the config file
+    if args.location_type is not None:
+        save_type = args.location_type
+
+    elif "model_info" in config and "location_type" in config["model_info"]:
+        save_type = config["model_info"]["location_type"]
+
+    else:
+        logger.error('location type must be pass in arguments or in the config file')
+        sys.exit()
+
     # get the models
-    models_path = os.path.join(model_location)
-    classifier, regressor = get_models(models_path)
+    if save_type == 'local':
+        models_path = os.path.join(model_location)
+        classifier, regressor = get_models_local(models_path)
+
+    elif save_type == 's3':
+        classifier, regressor = get_models_s3(model_location)
+
+    else:
+        logger.error('location type must be pass in arguments or in the config file as "s3" or "local"')
+        sys.exit()
 
     # get the features
     features = pull_features(engine)
@@ -270,7 +379,8 @@ if __name__ == '__main__':
     parser.add_argument('--type', default=None, help="type of database to create, 'sqlite' or 'mysql+pymysql'")
     parser.add_argument('--database_name', default=None,
                         help="location where database is to be created (including name.db)")
-    parser.add_argument('--model_location', default='models', help='location of where to save models')
+    parser.add_argument('--model_location', default=None, help='location of where to save models')
+    parser.add_argument('--location_type', default=None, help='whether the models will be saved locally or in s3')
 
     args = parser.parse_args()
 

@@ -6,8 +6,6 @@ from datetime import datetime  # import datetime for building folder paths
 import json, requests  # import necessary libraries for intake of JSON results from eventbrite
 
 from sqlalchemy import create_engine # import needed sqlalchemy library for db engine creation
-from sqlalchemy import Column, String, Integer, Boolean, DATETIME, DECIMAL  # import needed sqlalchemy libraries for db
-from sqlalchemy.ext.declarative import declarative_base  # import for declaring classes
 from sqlalchemy.ext.automap import automap_base # import for declaring classes
 from sqlalchemy.orm import sessionmaker  # import the sessionmaker for adding data to the database
 import pandas as pd
@@ -35,11 +33,15 @@ def set_headers(oauth_token=None):
     else:
         logger.debug("OAuth token provided in function call as %s", oauth_token)
 
-    # set the token into a requests header
-    headers = {
-        'Authorization': ('Bearer ' + oauth_token),
-    }
-    logger.debug('Headers created')
+    try:
+        # set the token into a requests header
+        headers = {
+            'Authorization': ('Bearer ' + oauth_token),
+        }
+        logger.debug('Headers created')
+    except Exception as e:
+        logger.error('Problem building headers: %s', e)
+        raise TypeError(e)
 
     # return the headers
     return headers
@@ -119,7 +121,7 @@ def create_db_engine(database_name, type):
     # if the type of database wasn't set to mysql_pymysql or sqlite, then log an error and exit
     else:
         logger.error("Type of database provided wasn't supported: %s", type)
-        sys.exit()
+        raise TypeError("Type of database provided wasn't supported")
 
     logger.debug("Engine string is %s", engine_string)
     # create the engine
@@ -662,67 +664,6 @@ def event_to_venue_dict(event):
     return venue_dict
 
 
-def create_features_table(engine):
-    """function for creating a features table in a database
-
-    Given a database connection engine, access the database and create a features table
-
-    Args:
-        engine (SQLAlchemy engine): the engine for working with a database
-
-    Returns:
-        None
-
-    """
-    # check if the features table already exists, stop execution if it does
-    if 'features' in engine.table_names():
-        logging.warning('features table already exists!')
-
-    else:
-        logger.debug("Creating a features table at %s", engine.url)
-
-        Base = declarative_base()
-
-        logger.debug("Creating the features table")
-
-        # create a feature class
-        class Feature(Base):
-            """Create a data model for the events table """
-            __tablename__ = 'features'
-            id = Column(String(12), primary_key=True)
-            startDate = Column(DATETIME(), unique=False, nullable=False)
-            categoryId = Column(Integer(), unique=False, nullable=False)
-            formatId = Column(Integer(), unique=False, nullable=False)
-            inventoryType = Column(String(30), unique=False, nullable=False)
-            isFree = Column(Boolean(), unique=False, nullable=False)
-            isReservedSeating = Column(Boolean(), unique=False, nullable=False)
-            minPrice = Column(DECIMAL(), unique=False, nullable=False)
-            maxPrice = Column(DECIMAL(), unique=False, nullable=False)
-            venueName_simple = Column(String(255), unique=False, nullable=False)
-            onSaleWindow = Column(Integer(), unique=False, nullable=False)
-            eventWeekday = Column(Integer(), unique=False, nullable=False)
-            startHour = Column(Integer(), unique=False, nullable=False)
-            capacity = Column(Integer(), unique=False, nullable=False)
-            locale = Column(String(10), unique=False, nullable=False)
-            ageRestriction = Column(String(30), unique=False, nullable=False)
-            presentedBy_simple = Column(String(30), unique=False, nullable=False)
-            isSoldOut = Column(Boolean(), unique=False, nullable=False)
-            soldOutLead = Column(Integer(), unique=False, nullable=False)
-
-            def __repr__(self):
-                return '<Feature %r>' % self.id
-
-        try:
-            # create the tables
-            Base.metadata.create_all(engine)
-
-            # check that the tables were created
-            for table in engine.table_names():
-                logger.info("Created table %s", table)
-        except Exception as e:
-            logger.error("Could not create the database: %s", e)
-
-
 def create_feature(engine, feature):
     """make an feature to add to the database using an engine
 
@@ -922,55 +863,6 @@ def pull_features(engine):
     logger.debug('%s', features.head())
 
     return features
-
-
-def create_scores_table(engine):
-    """function for creating a scores table in a database
-
-    Given a database connection engine, access the database and create a scores table
-
-    Args:
-        engine (SQLAlchemy engine): the engine for working with a database
-
-    Returns:
-        None
-
-    """
-    # check if the scores table already exists, stop execution if it does
-    if 'scores' in engine.table_names():
-        logging.warning('scores table already exists!')
-
-    else:
-        logger.debug("Creating a scores table at %s", engine.url)
-
-        Base = declarative_base()
-
-        logger.debug("Creating the scores table")
-
-        # create a score class
-        class Score(Base):
-            """Create a data model for the scores table """
-            __tablename__ = 'scores'
-            pred_id = Column(String(24), primary_key=True)
-            event_id = Column(String(12), unique=False, nullable=False)
-            startDate = Column(DATETIME(), unique=False, nullable=False)
-            predictionDate = Column(DATETIME(), unique=False, nullable=False)
-            willSellOut = Column(Boolean(), unique=False, nullable=False)
-            confidence = Column(DECIMAL(), unique=False, nullable=False)
-            howFarOut = Column(DECIMAL(), unique=False, nullable=False)
-
-            def __repr__(self):
-                return '<Score %r>' % self.id
-
-        try:
-            # create the tables
-            Base.metadata.create_all(engine)
-
-            # check that the tables were created
-            for table in engine.table_names():
-                logger.info("Created table %s", table)
-        except Exception as e:
-            logger.error("Could not create the database: %s", e)
 
 
 def create_score(engine, score):

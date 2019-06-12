@@ -5,9 +5,13 @@ so that all module imports can be absolute with respect to the main project dire
 
 To understand different arguments, run `python run.py --help`
 """
+import os
+import sys
+sys.path.append(os.environ.get('PYTHONPATH'))
 import argparse
 import logging.config
-from app.app import app
+import pytest
+from app import app
 
 # Define LOGGING_CONFIG in config.py - path to config file for setting up the logger (e.g. config/logging/local.conf)
 logging.config.fileConfig(app.config["LOGGING_CONFIG"])
@@ -23,8 +27,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Run components of the model source code")
     subparsers = parser.add_subparsers()
 
-    sb_run = subparsers.add_parser("app", description="Run Flask app")
-    sb_run.set_defaults(func=run_app)
+    flask_run = subparsers.add_parser("app", description="Run Flask app")
+    flask_run.set_defaults(func=run_app)
 
     args = parser.parse_args()
     args.func(args)
