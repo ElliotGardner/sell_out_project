@@ -1,7 +1,7 @@
 .PHONY: venv create ingest populate update features train score evaluate test daily initial all
 
 sell_out_env/bin/activate: requirements.txt
-	test -d sell_out_env || virtualenv sell_out_env
+	test -d sell_out_env || virtualenv sell_out_env --python=python3
 	. sell_out_env/bin/activate; pip install -r requirements.txt
 	touch sell_out_env/bin/activate
 
