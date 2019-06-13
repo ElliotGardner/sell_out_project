@@ -10,7 +10,7 @@ database_info:
   rds_database_name: msia423
   local_database_folder: data
   local_database_type: sqlite
-  local_database_name: events_test2.db
+  local_database_name: events.db
   how: local #local or rds, nothing else currently supported
 
 populate_database:
@@ -26,10 +26,14 @@ update_database:
     frmats_URL: 'https://www.eventbriteapi.com/v3/formats/' #change this in both locations if necessary
     categories_URL: 'https://www.eventbriteapi.com/v3/subcategories/?' #change this in both locations if necessary
   update_events_venues:
-    raw_data_location: emg8426.msia423.project #change this in all three locations if necessary
-    location_type: s3 # local or s3
+    raw_data_location: 'data/sample' #change this in all three locations if necessary
+    location_type: local # local or s3
 
 model_info:
   model_type: linear # linear and tree currently supported
-  model_location: emg8426.msia423.project
-  location_type: s3 # local or s3
+  model_location: models # local folder or s3 bucket name
+  location_type: local # local or s3
+
+evaluate_model:
+  save_location: deliverables # local folder or s3 bucket name
+  location_type: local # local or s3

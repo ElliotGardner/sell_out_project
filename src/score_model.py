@@ -15,13 +15,12 @@ from sqlalchemy.ext.declarative import declarative_base  # import for declaring 
 import numpy as np
 import boto3
 
-from src.helpers.helpers import create_db_engine, pull_features  # import helpers for creating an engine and pulling features
-from src.helpers.helpers import create_score, update_score  # import helpers for creating and updating scores
-
 configPath = os.path.join("config", "logging", "local.conf")
 logging.config.fileConfig(configPath)
 logger = logging.getLogger("score_model_log")
 
+from src.helpers.helpers import create_db_engine, pull_features  # import helpers for creating an engine and pulling features
+from src.helpers.helpers import create_score, update_score  # import helpers for creating and updating scores
 
 def get_models_local(location):
     """function for opening loading saved models from a local folder
@@ -373,14 +372,14 @@ def run_scoring(args):
 if __name__ == '__main__':
     logger.debug('Start of score_model Script')
 
-    # if this code is run as a script, then parse arguments for the location of the config and, optionally, the type and location of the db
-    parser = argparse.ArgumentParser(description="create database")
+    # if this code is run as a script, then parse arguments for the location of the config and, optionally, the type and location of the db and models
+    parser = argparse.ArgumentParser(description="score models")
     parser.add_argument('--config', help='path to yaml file with configurations')
-    parser.add_argument('--type', default=None, help="type of database to create, 'sqlite' or 'mysql+pymysql'")
+    parser.add_argument('--type', default=None, help="type of database, 'sqlite' or 'mysql+pymysql'")
     parser.add_argument('--database_name', default=None,
-                        help="location where database is to be created (including name.db)")
-    parser.add_argument('--model_location', default=None, help='location of where to save models')
-    parser.add_argument('--location_type', default=None, help='whether the models will be saved locally or in s3')
+                        help="location of database (including name.db)")
+    parser.add_argument('--model_location', default=None, help='location of where the models were saved')
+    parser.add_argument('--location_type', default=None, help='whether the models were saved locally or in s3')
 
 
     args = parser.parse_args()

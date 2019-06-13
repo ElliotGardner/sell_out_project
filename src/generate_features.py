@@ -12,12 +12,11 @@ from sqlalchemy.ext.automap import automap_base # import for declaring classes
 from sqlalchemy.ext.declarative import declarative_base  # import for declaring classes
 from sqlalchemy import Column, String, Integer, Boolean, DATETIME, DECIMAL  # import needed sqlalchemy libraries for db
 
-from src.helpers.helpers import create_db_engine, create_feature, update_feature  # import helpers for creating an engine, creating and updating features
-
 configPath = os.path.join("config", "logging", "local.conf")
 logging.config.fileConfig(configPath)
 logger = logging.getLogger("generate_features_log")
 
+from src.helpers.helpers import create_db_engine, create_feature, update_feature  # import helpers for creating an engine, creating and updating features
 
 def convert_data_to_features(engine):
     """function for pulling data from a populated and updated database for training a model
@@ -330,11 +329,11 @@ if __name__ == '__main__':
     logger.debug('Start of generate_features Script')
 
     # if this code is run as a script, then parse arguments for the location of the config and, optionally, the type and location of the db
-    parser = argparse.ArgumentParser(description="create database")
+    parser = argparse.ArgumentParser(description="create features")
     parser.add_argument('--config', help='path to yaml file with configurations')
-    parser.add_argument('--type', default=None, help="type of database to create, 'sqlite' or 'mysql+pymysql'")
+    parser.add_argument('--type', default=None, help="type of database, 'sqlite' or 'mysql+pymysql'")
     parser.add_argument('--database_name', default=None,
-                        help="location where database is to be created (including name.db)")
+                        help="location of database (including name.db)")
 
     args = parser.parse_args()
 

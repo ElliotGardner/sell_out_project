@@ -10,11 +10,11 @@ import logging.config  # import logging config
 
 import boto3  # interact with s3
 
-from src.helpers.helpers import set_headers, API_request  # helper functions for ingesting data
-
 configPath = os.path.join("config","logging","local.conf")
 logging.config.fileConfig(configPath)
 logger = logging.getLogger("ingest_data_log")
+
+from src.helpers.helpers import set_headers, API_request  # helper functions for ingesting data
 
 
 def save_JSON_s3(JSON_data, filename, bucket, folder = "", public=False):

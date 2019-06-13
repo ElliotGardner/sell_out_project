@@ -13,14 +13,14 @@ from sqlalchemy.ext.automap import automap_base # import for declaring classes
 import boto3  # import boto3 for access s3
 import pandas as pd
 
+configPath = os.path.join("config","logging","local.conf")
+logging.config.fileConfig(configPath)
+logger = logging.getLogger("update_database_log")
+
 from src.helpers.helpers import API_request, set_headers, create_db_engine  # import helper functions for API requests, headers setting, and creating a DB engine
 from src.helpers.helpers import create_event, create_venue, create_frmat, create_category  # import helper functions for DB creation
 from src.helpers.helpers import update_event, update_venue, update_frmat, update_category  # import helper functions for DB update
 from src.helpers.helpers import event_to_event_dict, event_to_venue_dict  # import helpers for event and venue comparison as dicts
-
-configPath = os.path.join("config","logging","local.conf")
-logging.config.fileConfig(configPath)
-logger = logging.getLogger("update_database_log")
 
 
 def update_format_categories(engine, frmats_URL, categories_URL, headers=None):
@@ -194,6 +194,7 @@ def update_events_venues(engine, raw_data_location, location_type):
     try:
         with open(update_path, mode='r') as f:
             last_update_date = f.readline()
+            logger.debug('last update date: %s', last_update_date)
     except Exception as e:
         last_update_date = '90-01-01-01-01-01'
 

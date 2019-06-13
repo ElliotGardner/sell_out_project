@@ -9,12 +9,11 @@ import logging.config  # import logging config
 from sqlalchemy import Column, String, Integer, Boolean, DATETIME, DECIMAL  # import needed sqlalchemy libraries for db
 from sqlalchemy.ext.declarative import declarative_base  # import for declaring classes
 
-from src.helpers.helpers import create_db_engine  # helper function for creating a db engine
-
 configPath = os.path.join("config","logging","local.conf")
 logging.config.fileConfig(configPath)
 logger = logging.getLogger("create_database_log")
 
+from src.helpers.helpers import create_db_engine  # helper function for creating a db engine
 
 def create_db(engine):
     """create a database at a specified location

@@ -955,3 +955,28 @@ def update_score(engine, score):
 
     # close the session
     session.close()
+
+
+def pull_scores(engine):
+    """function for pulling scores from a database for evaluating a model
+
+    Given a database connection engine, access the database and pull the requested
+    data as a Pandas dataframe.
+
+    Args:
+        engine (SQLAlchemy engine): the engine for working with a database
+
+    Returns:
+        scores (pandas DataFrame): a dataframe containing the scores columns for each event
+
+    """
+    logger.debug('Start of pull scores function')
+
+    scores = pd.read_sql('SELECT * FROM scores', engine)
+    scores['startDate'] = scores['startDate'].apply(lambda x: datetime.fromisoformat(x) if type(x) == str else x.to_pydatetime())
+    scores['predictionDate'] = scores['predictionDate'].apply(
+        lambda x: datetime.fromisoformat(x) if type(x) == str else x.to_pydatetime())
+
+    logger.debug('%s', scores.head())
+
+    return scores

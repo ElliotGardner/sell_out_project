@@ -1,3 +1,33 @@
+Instructions:
+
+To access data from the eventbrite API, you need an API key:
+1. To obtain one, login (or create an account) at https://www.eventbrite.com/signin/?referrer=%2Faccount-settings%2Fapps
+2. After logging in, navigate from the top bar to "account settings"
+3. On the left, there is a dropdown for "Developer Links"
+4. Select "API Keys" from this menu
+5. Click "Create API Key" and fill out the requested information (I used this location of my repo for the site url)
+6. Once granted, use the "Private API Key" or "personal oauth token" when an "API_token" is requested within this code repo
+
+In order to get started, a few environmental variables must be set up.
+1. Export the top-level directory for the repo (wherever it is cloned to) to the environmental "PYTHONPATH" variable using the command `export PYTHONPATH=<location of repo top level>`.
+2. Reset the "last_update.txt" file in the "config" folder to a date prior to the ingest of your first data, maintaining the same date format. I used "90-01-01-01-01-01".
+3. If you are using a mysql database or saving data to s3, then you need to also export your mysql and establish your aws configurations.
+	- For MySQL, at a minimum call `export MYSQL_HOST = <host>`, `export MYSQL_USER= <user>`, `export MYSQL_PORT = <port>`, and `export MYSQL_PASSWORD = <password>` with your relevant info
+	- For AWS, follow this guide: https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html
+
+config/config.yml holds the key configurations for running all of the scripts without needing to pass arguments beyond the API key. If you wish to adjust settings, ensure that you change the settings in multiple locations if the same field is repeated (for instance, raw_data_location)
+
+Once all that has been completed, the `make all` function should construct the app in it's entirety, to include setting up a virtual environment, ingesting the data from the API, creating the database, populating the data, building models, and evaluation of results.
+
+For a daily update, the `make daily` command will run only the 'update', 'features', 'train', 'score', and 'evaluate' portions of the app.
+
+Data can be downloaded from the API directly, however, no historical data is provided. Instead, I have hosted the historical data that I have gathered over the past two months into a public AWS S3 bucket, at 'emg8426.msia423.project' in the 'raw' folder. The app is currently configured to use a subset of data from the 'data/sample' folder (which will be quicker), but alternatively the config.yml file can be changed to reflect the S3 bucket in order to ingest all the data that I had access to.
+
+In order to serve up the app as a Flask-supported website, adjust the settings in config/flask_config.py as necessary, and then call `python run.py app`.
+
+Lastly, testing is accomplished either through "make test" or calling `pytest` from the command line from the top-level of the repo.
+
+
 # Project Charter
 
 * **Vision**: Help concertgoers make informed decisions regarding when to buy concert tickets through predicting which shows will sell out. This will give them time to find out if friends and family are interested in attending as well, without fear of encountering a sold-out event by the time they've finished coordinating a group outing. This will increase marginal utility for users, and allow more social-influencing activity, increasing the chances of exposing a larger set of people to artists, venues, and events.
@@ -45,31 +75,23 @@
  
 # Backlog
  
-1. Events Listings and Prediction - Data Gathering - API Integration (1 pt) - PLANNED
-2. Events Listings and Prediction - Data Gathering - Data Gathering (2 pts) - PLANNED
-3. Events Listings and Prediction - Data Gathering - Data Formatting (2 pts) - PLANNED
-4. Events Listings and Prediction - Sell-Out Prediction - Logistic Model (1 pt) - PLANNED
-5. Events Listings and Prediction - Sell-Out Prediction - Boosted Tree (1 pt) - PLANNED
-6. Events Listings and Prediction - Sell-Out Prediction - Random Forest (1 pt) - PLANNED
-7. Events Listings and Prediction - Sell-Out Prediction - Neural Network (1 pt) - PLANNED
-8. Events Listings and Prediction - Sell-Out Prediction - Model Selection (2 pts) - PLANNED
-9. User Interaction - Web App Construction - Database Hosting (4 pts)
-10. User Interaction - Web App Construction - Model Hosting (4 pts)
+1. Events Listings and Prediction - Data Gathering - API Integration (1 pt) - COMPLETED
+2. Events Listings and Prediction - Data Gathering - Data Gathering (2 pts) - COMPLETED
+3. Events Listings and Prediction - Data Gathering - Data Formatting (2 pts) - COMPLETED
+4. Events Listings and Prediction - Sell-Out Prediction - Logistic Model (1 pt) - COMPLETED
+5. Events Listings and Prediction - Sell-Out Prediction - Boosted Tree (1 pt) - COMPLETED
+6. Events Listings and Prediction - Sell-Out Prediction - Random Forest (1 pt) - CANCELED
+7. Events Listings and Prediction - Sell-Out Prediction - Neural Network (1 pt) - CANCELED
+8. Events Listings and Prediction - Sell-Out Prediction - Model Selection (2 pts) - COMPLETED
+9. User Interaction - Web App Construction - Database Hosting (4 pts) - COMPLETED
+10. User Interaction - Web App Construction - Model Hosting (4 pts) - COMPLETED
+11. User Interaction - Web App Construction - Interface Building - COMPLETED
+12. New Features - Days Until Sell Out Prediction - COMPLETED
  
 # Icebox
 
-* User Interaction - Web App Construction - Interface Building
 * User Interaction - Event Selection - Event Search
 * User Interaction - Event Selection - Event Selection
 * New Features - Spotify Artist Popularity Incorporation
-* New Features - Days Until Sell Out Prediction
 * New Features - User Event Watchlist
 * New Features - Customized User Event Digest
-
-Instructions:
-
-You need an API key to call the eventbrite API, I will message you one to use so that it isn't posted online.
-
-config/config.yml holds the key configurations for running the ingest_data and create_database scripts.
-
-Only ingest_data and create_database need to be looked at, other scripts weren't used or were for original efforts to get API ingest working.

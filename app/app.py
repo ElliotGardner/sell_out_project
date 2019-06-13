@@ -2,6 +2,7 @@ import traceback
 from flask import render_template
 import logging.config
 from datetime import datetime
+import os
 
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
@@ -13,7 +14,8 @@ from sqlalchemy.ext.automap import automap_base # import for declaring classes
 app = Flask(__name__)
 
 # Configure flask app from flask_config.py
-app.config.from_pyfile('../config/flask_config.py')
+flask_config = os.path.join("..","config","flask_config.py")
+app.config.from_pyfile(flask_config)
 
 # Define LOGGING_CONFIG in flask_config.py - path to config file for setting
 # up the logger (e.g. config/logging/local.conf)

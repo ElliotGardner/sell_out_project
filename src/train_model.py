@@ -16,13 +16,12 @@ from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import KFold, cross_val_score
 import boto3
-
-from src.helpers.helpers import create_db_engine, pull_features  # import helpers for creating an engine and pulling the features table
  
 configPath = os.path.join("config", "logging", "local.conf")
 logging.config.fileConfig(configPath)
 logger = logging.getLogger("train_model_log")
 
+from src.helpers.helpers import create_db_engine, pull_features  # import helpers for creating an engine and pulling the features table
 
 def train_models(model_type, features):
     """function for training a model of specified type using a set of passed features

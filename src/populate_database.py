@@ -12,12 +12,12 @@ import boto3  # import boto3 for access s3
 from sqlalchemy.orm import sessionmaker  # import the sessionmaker for adding data to the database
 from sqlalchemy.ext.automap import automap_base # import for declaring classes
 
-from src.helpers.helpers import API_request, set_headers, create_db_engine  # import helper functions for API requests, headers setting, and creating a DB engine
-from src.helpers.helpers import create_event, create_venue, create_frmat, create_category  # import helper functions for DB creation
-
 configPath = os.path.join("config","logging","local.conf")
 logging.config.fileConfig(configPath)
 logger = logging.getLogger("populate_database_log")
+
+from src.helpers.helpers import API_request, set_headers, create_db_engine  # import helper functions for API requests, headers setting, and creating a DB engine
+from src.helpers.helpers import create_event, create_venue, create_frmat, create_category  # import helper functions for DB creation
 
 
 def initial_populate_format_categories(engine, frmats_URL, categories_URL, headers=None):
